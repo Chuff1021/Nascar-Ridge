@@ -15,16 +15,24 @@
 }
 
 html {
+  width: 100%;
   min-height: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
+  width: 100%;
   min-width: 320px;
   min-height: 100svh;
   margin: 0;
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
 }
 
 #root {
+  width: 100%;
   min-height: 100svh;
 }
 
