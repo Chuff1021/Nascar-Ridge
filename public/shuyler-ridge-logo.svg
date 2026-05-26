@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="220" viewBox="0 0 720 220" role="img" aria-labelledby="title">
+  <title id="title">Shuyler Ridge Raceday</title>
+  <defs>
+    <linearGradient id="stripe" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset=".26" stop-color="#1d4ed8"/>
+      <stop offset=".27" stop-color="#facc15"/>
+      <stop offset=".48" stop-color="#facc15"/>
+      <stop offset=".49" stop-color="#ef233c"/>
+      <stop offset=".78" stop-color="#ef233c"/>
+      <stop offset=".79" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="220" rx="28" fill="#07090f"/>
+  <path d="M36 173 C 132 80, 270 47, 420 86 C 529 114, 613 101, 686 57" fill="none" stroke="#f8fafc" stroke-width="36" stroke-linecap="round" opacity=".22"/>
+  <path d="M36 173 C 132 80, 270 47, 420 86 C 529 114, 613 101, 686 57" fill="none" stroke="#111827" stroke-width="16" stroke-linecap="round"/>
+  <path d="M36 173 C 132 80, 270 47, 420 86 C 529 114, 613 101, 686 57" fill="none" stroke="#facc15" stroke-width="4" stroke-dasharray="18 14"/>
+  <g transform="translate(42 32)">
+    <path d="M0 0h20v20H0zm40 0h20v20H40zM20 20h20v20H20zm60 0h20v20H80zM0 40h20v20H0zm40 40h20v20H40zM20 60h20v20H20zm60 0h20v20H80z" fill="#fff"/>
+    <path d="M20 0h20v20H20zM60 0h20v20H60zM0 20h20v20H0zm40 20h20v20H40zM20 40h20v20H20zm60 0h20v20H80zM0 60h20v20H0zm40 0h20v20H40z" fill="#111827"/>
+  </g>
+  <path d="M151 38h351l-16 42H135z" fill="url(#stripe)"/>
+  <text x="136" y="121" font-family="Arial Black, Impact, sans-serif" font-size="58" font-weight="900" letter-spacing="0" fill="#fff">SHUYLER RIDGE</text>
+  <text x="139" y="171" font-family="Arial Black, Impact, sans-serif" font-size="47" font-weight="900" letter-spacing="0" fill="#facc15">RACEDAY</text>
+  <circle cx="609" cy="139" r="52" fill="#ef233c"/>
+  <text x="609" y="158" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-size="54" font-weight="900" fill="#fff">SR</text>
+</svg>

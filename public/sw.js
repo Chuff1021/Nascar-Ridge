@@ -1,5 +1,5 @@
-const CACHE_NAME = 'shuyler-ridge-raceday-v1'
-const ASSETS = ['/', '/manifest.webmanifest', '/app-icon.svg']
+const CACHE_NAME = 'shuyler-ridge-raceday-v2'
+const ASSETS = ['/', '/manifest.webmanifest', '/app-icon.svg', '/nascar-logo.svg', '/shuyler-ridge-logo.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)))

@@ -4,12 +4,16 @@ Shuyler Ridge Raceday is a phone-first NASCAR driver draw app for a weekly frien
 
 ## What it does
 
-- Pick a friend profile and see your weekly garage.
-- Randomly draw drivers for every player using a separate shuffled player order and driver order.
+- Log in as Cody, Emily, Cory, Sku, Tyler, Hillary, Colton, Shannon, Nate, or Lundy.
+- Cody gets commissioner controls for selecting weekly participants and drawing teams.
+- Randomly draw drivers for participating players using a separate shuffled player order and driver order.
 - Track who paid the weekly $5.
 - Mark the weekly winner and second-place money-back result.
 - Keep season standings, result history, and local trash talk chat.
+- Poll a Vercel API route for NASCAR live timing data and show the current leaderboard when available.
 - Install as a PWA on iPhone and Android from the browser.
+
+Prototype league code: `raceday`
 
 ## Local development
 

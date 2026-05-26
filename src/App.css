@@ -1,57 +1,228 @@
-.app-shell {
+:root {
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --panel: rgba(11, 16, 29, 0.92);
+  --panel-2: rgba(19, 27, 45, 0.94);
+  --line: rgba(255, 255, 255, 0.13);
+  --red: #ef233c;
+  --blue: #1d4ed8;
+  --yellow: #facc15;
+  --green: #16a34a;
+}
+
+.app-shell,
+.login-shell {
   min-height: 100svh;
   max-width: 460px;
   margin: 0 auto;
-  color: #171717;
+  color: var(--ink);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(246, 247, 241, 0.98)),
-    repeating-linear-gradient(45deg, #111 0 10px, #f8f8f8 10px 20px);
-  display: flex;
-  flex-direction: column;
+    radial-gradient(circle at 70% 4%, rgba(239, 35, 60, 0.28), transparent 28%),
+    radial-gradient(circle at 8% 18%, rgba(29, 78, 216, 0.34), transparent 34%),
+    linear-gradient(180deg, #05070d 0%, #0b1020 45%, #141414 100%);
   position: relative;
   overflow-x: hidden;
 }
 
-.topbar {
+.app-shell::before,
+.login-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  max-width: 460px;
+  margin: 0 auto;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(135deg, transparent 0 14px, rgba(255, 255, 255, 0.03) 14px 28px),
+    linear-gradient(90deg, rgba(29, 78, 216, 0.24), rgba(250, 204, 21, 0.16), rgba(239, 35, 60, 0.2));
+  mask-image: linear-gradient(180deg, #000 0, transparent 46%);
+}
+
+.login-shell {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.login-card {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  background: rgba(5, 7, 13, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+}
+
+.logo-stage {
+  min-height: 154px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent),
+    url('./assets/track-texture.svg');
+  background-size: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.logo-stage img,
+.sr-wordmark {
+  width: 100%;
+  display: block;
+}
+
+.nascar-lockup {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: max(18px, env(safe-area-inset-top)) 18px 12px;
+  gap: 12px;
+  padding: 14px 2px;
 }
 
-.brand-lockup {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
+.nascar-lockup span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
-.app-mark,
-.icon-button,
-.chat-form button,
-.inline-form button {
-  width: 44px;
-  height: 44px;
+.nascar-lockup img {
+  width: 118px;
+  max-height: 28px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+}
+
+.login-form,
+.admin-panel,
+.account-card {
+  display: grid;
+  gap: 12px;
+}
+
+.login-form label,
+.admin-panel label,
+.result-grid label {
+  color: var(--muted);
+  display: grid;
+  gap: 7px;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.login-form input,
+.login-form select,
+.admin-panel select,
+.result-grid select,
+.chat-form input,
+.inline-form input {
+  width: 100%;
+  min-height: 46px;
+  color: var(--ink);
+  background: #0b1222;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-weight: 760;
+}
+
+.login-form button,
+.account-card button,
+.admin-action button {
+  min-height: 48px;
   border: 0;
   border-radius: 8px;
-  display: inline-grid;
+  color: #071018;
+  background: linear-gradient(90deg, var(--yellow), #ffffff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 950;
+}
+
+.login-error {
+  color: #fecaca;
+  font-size: 0.82rem;
+  font-weight: 780;
+}
+
+.topbar {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 98px;
+  align-items: center;
+  gap: 10px;
+  padding: max(14px, env(safe-area-inset-top)) 14px 8px;
+}
+
+.sr-wordmark {
+  min-width: 0;
+  height: 70px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.nascar-badge {
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
   place-items: center;
 }
 
-.app-mark {
-  color: #fff;
-  background: #d92525;
-  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.2);
+.nascar-badge img {
+  width: 80px;
+  display: block;
+}
+
+.race-hero {
+  position: relative;
+  z-index: 1;
+  margin: 0 14px 12px;
+  min-height: 202px;
+  background:
+    linear-gradient(115deg, rgba(5, 7, 13, 0.86), rgba(15, 23, 42, 0.54)),
+    url('./assets/track-texture.svg');
+  background-size: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.race-hero::after {
+  content: '';
+  position: absolute;
+  right: -80px;
+  bottom: -88px;
+  width: 230px;
+  aspect-ratio: 1;
+  border: 30px solid rgba(255, 255, 255, 0.2);
+  border-left-color: var(--red);
+  border-bottom-color: var(--yellow);
+  border-radius: 50%;
+  transform: rotate(-24deg);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  padding: 20px 16px 16px;
 }
 
 .eyebrow {
-  color: #6b7280;
+  color: var(--yellow);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0;
   line-height: 1.2;
-  margin: 0 0 3px;
+  margin: 0 0 5px;
   text-transform: uppercase;
 }
 
@@ -63,24 +234,97 @@ p {
 }
 
 h1 {
-  color: #111827;
-  font-size: 1.62rem;
-  font-weight: 900;
-  line-height: 0.95;
+  max-width: 320px;
+  color: #ffffff;
+  font-size: 2.25rem;
+  font-weight: 950;
+  line-height: 0.92;
+  text-transform: uppercase;
 }
 
 h2 {
-  color: #111827;
+  color: #ffffff;
   font-size: 1.35rem;
-  font-weight: 900;
+  font-weight: 950;
   line-height: 1.05;
 }
 
 h3 {
-  color: #111827;
+  color: #ffffff;
   font-size: 0.98rem;
-  font-weight: 850;
+  font-weight: 900;
   line-height: 1.15;
+}
+
+.hero-content span,
+.garage-banner span,
+.driver-card p,
+.team-card p,
+.standing-row p,
+.history-row p,
+.history-row small,
+.live-card p,
+.leader-row p,
+.account-card p,
+.empty-state p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 680;
+  line-height: 1.25;
+}
+
+.hero-metrics {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hero-metrics div,
+.metric-tile,
+.garage-banner,
+.driver-card,
+.section-head,
+.standing-row,
+.history-row,
+.message,
+.live-card,
+.leader-row,
+.admin-panel,
+.team-card,
+.empty-state,
+.fairness-band,
+.account-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  backdrop-filter: blur(14px);
+}
+
+.hero-metrics div {
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  padding: 9px;
+}
+
+.hero-metrics span,
+.metric-tile span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.hero-metrics strong,
+.metric-tile strong {
+  color: #ffffff;
+  font-size: 1.08rem;
+  font-weight: 950;
 }
 
 button,
@@ -93,251 +337,24 @@ button {
   cursor: pointer;
 }
 
-.user-switch {
-  min-width: 126px;
-  color: #6b7280;
-  display: grid;
-  gap: 3px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  text-align: left;
-  text-transform: uppercase;
-}
-
-.user-switch select,
-.admin-panel select,
-.result-grid select {
-  width: 100%;
-  min-height: 38px;
-  color: #111827;
-  background: #ffffff;
-  border: 1px solid #d8ddd1;
-  border-radius: 8px;
-  padding: 0 10px;
-  font-size: 0.9rem;
-  font-weight: 760;
-}
-
-.race-strip {
-  margin: 0 14px 10px;
-  min-height: 118px;
-  color: #ffffff;
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(22, 101, 52, 0.78)),
-    url('./assets/track-texture.svg');
-  background-size: cover;
-  border-radius: 8px;
-  padding: 15px;
-  display: grid;
-  grid-template-columns: 82px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  box-shadow: 0 16px 28px rgba(17, 24, 39, 0.18);
-}
-
-.race-strip h2,
-.race-strip p,
-.race-strip span {
-  color: #ffffff;
-}
-
-.race-strip p {
-  color: #fde047;
-  font-size: 0.77rem;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.race-strip span {
-  display: block;
-  color: #d7f4df;
-  font-size: 0.85rem;
-  font-weight: 700;
-  margin-top: 5px;
-}
-
-.track-art {
-  width: 82px;
-  aspect-ratio: 1;
-  border: 10px solid #f8fafc;
-  border-left-color: #ef4444;
-  border-bottom-color: #facc15;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  transform: rotate(-18deg);
-}
-
-.track-art span {
-  width: 38px;
-  aspect-ratio: 1;
-  border: 3px dashed rgba(255, 255, 255, 0.8);
-  border-radius: 50%;
-}
-
-.pot-pill,
-.mini-stat {
-  min-width: 54px;
-  height: 38px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  font-weight: 900;
-}
-
-.pot-pill {
-  color: #111827;
-  background: #fde047;
-}
-
 .screen {
-  flex: 1;
-  padding: 8px 14px 92px;
+  position: relative;
+  z-index: 1;
+  padding: 0 14px 92px;
 }
 
-.hero-panel,
-.section-head,
-.fairness-band,
-.admin-panel {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #dce1d5;
-  border-radius: 8px;
-}
-
-.hero-panel,
+.garage-banner,
 .section-head {
-  min-height: 74px;
-  padding: 14px;
+  min-height: 82px;
+  padding: 13px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.mini-stat {
-  color: #ffffff;
-  background: #111827;
-}
-
-.driver-list,
-.team-stack,
-.standings-list,
-.history-list,
-.message-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.driver-card,
-.team-card,
-.standing-row,
-.history-row,
-.message,
-.metric-tile {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #dce1d5;
-  border-radius: 8px;
-}
-
-.driver-card {
-  min-height: 72px;
-  padding: 12px;
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  align-items: center;
-  gap: 12px;
-}
-
-.car-number {
-  height: 48px;
-  color: #ffffff;
-  background: #111827;
-  border-left: 6px solid #d92525;
-  border-radius: 7px;
-  display: grid;
-  place-items: center;
-  font-size: 1.05rem;
-  font-weight: 950;
-}
-
-.driver-card p,
-.team-card p,
-.standing-row p,
-.history-row p,
-.history-row small {
-  color: #667085;
-  font-size: 0.82rem;
-  font-weight: 650;
-  line-height: 1.25;
-  margin-top: 4px;
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.metric-tile {
-  min-height: 78px;
-  padding: 12px;
-  display: grid;
-  align-content: space-between;
-}
-
-.metric-tile span {
-  color: #667085;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.metric-tile strong {
-  color: #111827;
-  font-size: 1.2rem;
-  font-weight: 950;
-}
-
-.icon-button {
-  color: #ffffff;
-  background: #d92525;
-}
-
-.fairness-band {
-  min-height: 58px;
-  margin-top: 10px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #14532d;
-  background: #eaf8ee;
-}
-
-.fairness-band p {
-  font-size: 0.82rem;
-  font-weight: 730;
-  line-height: 1.28;
-}
-
-.team-card {
-  min-height: 112px;
-  padding: 12px;
-}
-
-.team-card-head,
-.standing-row,
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-}
-
-.team-card-head {
-  justify-content: space-between;
+.section-head.dark {
+  background: linear-gradient(100deg, rgba(239, 35, 60, 0.24), rgba(29, 78, 216, 0.2)), var(--panel);
 }
 
 .avatar {
@@ -349,42 +366,114 @@ button {
   flex: 0 0 auto;
   place-items: center;
   font-weight: 950;
+  text-transform: uppercase;
 }
 
-.paid-check {
-  color: #0f8b5f;
+.avatar.xl {
+  width: 56px;
+  height: 56px;
+  font-size: 1.3rem;
 }
 
-.number-row {
-  display: flex;
-  gap: 7px;
-  overflow-x: auto;
-  padding-top: 12px;
+.rank-badge,
+.flag-chip {
+  min-width: 54px;
+  height: 38px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-weight: 950;
 }
 
-.number-row span {
-  flex: 0 0 auto;
-  min-width: 43px;
-  height: 32px;
+.rank-badge {
+  color: #071018;
+  background: var(--yellow);
+}
+
+.driver-list,
+.team-stack,
+.standings-list,
+.history-list,
+.message-list,
+.leaderboard {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.driver-card {
+  min-height: 78px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 74px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.car-number {
+  height: 50px;
+  color: #ffffff;
+  background:
+    linear-gradient(90deg, var(--red) 0 8px, transparent 8px),
+    #030712;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 7px;
-  color: #111827;
-  background: #f3f4f6;
   display: grid;
   place-items: center;
-  font-size: 0.84rem;
-  font-weight: 900;
+  font-size: 1.05rem;
+  font-weight: 950;
 }
 
-.standing-row {
-  min-height: 72px;
+.car-number.small {
+  width: 48px;
+  height: 38px;
+  font-size: 0.8rem;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.metric-tile {
+  min-height: 82px;
+  padding: 12px;
+  display: grid;
+  align-content: space-between;
+}
+
+.empty-state {
+  min-height: 168px;
+  margin-top: 12px;
+  padding: 18px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.empty-state svg {
+  color: var(--yellow);
+}
+
+.standing-row,
+.history-row,
+.leader-row {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
   padding: 12px;
 }
 
 .rank {
   width: 38px;
   height: 38px;
-  color: #ffffff;
-  background: #111827;
+  color: #071018;
+  background: linear-gradient(135deg, var(--yellow), #ffffff);
   border-radius: 8px;
   display: grid;
   flex: 0 0 auto;
@@ -392,13 +481,14 @@ button {
   font-weight: 950;
 }
 
-.standing-row div:nth-child(2) {
+.standing-row div:nth-child(2),
+.leader-row div:nth-child(3) {
   flex: 1;
   min-width: 0;
 }
 
 .standing-row strong {
-  color: #0f8b5f;
+  color: #86efac;
   font-weight: 950;
 }
 
@@ -407,9 +497,7 @@ button {
 }
 
 .history-row {
-  min-height: 70px;
   justify-content: space-between;
-  padding: 12px;
 }
 
 .history-row > div:last-child {
@@ -417,18 +505,64 @@ button {
 }
 
 .history-row span {
-  color: #111827;
+  color: #ffffff;
   display: block;
   font-weight: 900;
+}
+
+.live-card {
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.live-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.flag-chip {
+  color: #071018;
+  background: #e5e7eb;
+  font-size: 0.78rem;
+}
+
+.flag-1 {
+  background: #22c55e;
+}
+
+.flag-2 {
+  background: var(--yellow);
+}
+
+.flag-3 {
+  color: #ffffff;
+  background: var(--red);
+}
+
+.flag-4 {
+  background: repeating-linear-gradient(45deg, #fff 0 8px, #111 8px 16px);
+  color: var(--yellow);
+}
+
+.lap-meter {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lap-meter span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--yellow), var(--red));
 }
 
 .chat-screen {
   display: flex;
   flex-direction: column;
-}
-
-.message-list {
-  align-content: start;
 }
 
 .message {
@@ -439,13 +573,12 @@ button {
 
 .message.mine {
   justify-self: end;
-  color: #ffffff;
-  background: #1f2937;
-  border-color: #1f2937;
+  color: #071018;
+  background: linear-gradient(135deg, var(--yellow), #ffffff);
 }
 
 .message span {
-  color: #d92525;
+  color: var(--yellow);
   display: block;
   font-size: 0.72rem;
   font-weight: 900;
@@ -453,18 +586,19 @@ button {
 }
 
 .message.mine span,
-.message.mine small {
-  color: #fde047;
+.message.mine small,
+.message.mine p {
+  color: #071018;
 }
 
 .message p {
   font-size: 0.95rem;
-  font-weight: 680;
+  font-weight: 720;
   line-height: 1.32;
 }
 
 .message small {
-  color: #667085;
+  color: var(--muted);
   display: block;
   font-size: 0.72rem;
   font-weight: 800;
@@ -481,20 +615,20 @@ button {
 
 .chip-row button {
   flex: 0 0 auto;
-  min-height: 36px;
-  border: 1px solid #cfd6c8;
+  min-height: 38px;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  color: #111827;
-  background: #ffffff;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
   padding: 0 13px;
   font-size: 0.8rem;
-  font-weight: 820;
+  font-weight: 850;
 }
 
 .chat-form,
 .inline-form {
   display: grid;
-  grid-template-columns: 1fr 44px;
+  grid-template-columns: 1fr 46px;
   gap: 8px;
 }
 
@@ -503,73 +637,129 @@ button {
   bottom: 82px;
 }
 
-.chat-form input,
-.inline-form input {
-  min-height: 44px;
-  border: 1px solid #cfd6c8;
-  border-radius: 8px;
-  color: #111827;
-  background: #ffffff;
-  padding: 0 12px;
-  font-weight: 720;
-}
-
 .chat-form button,
 .inline-form button {
-  color: #ffffff;
-  background: #0f8b5f;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 8px;
+  color: #071018;
+  background: var(--yellow);
+  display: grid;
+  place-items: center;
 }
 
 .admin-panel {
-  padding: 12px;
-  display: grid;
-  gap: 14px;
   margin-top: 12px;
+  padding: 12px;
+  background: rgba(5, 7, 13, 0.76);
 }
 
-.admin-panel label,
-.result-grid label {
-  color: #667085;
-  display: grid;
-  gap: 6px;
-  font-size: 0.78rem;
-  font-weight: 850;
-  text-transform: uppercase;
+.admin-action {
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(110deg, rgba(239, 35, 60, 0.22), rgba(250, 204, 21, 0.14));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
+.admin-action button {
+  min-width: 98px;
+}
+
+.mini-title {
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.participant-grid,
 .paid-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
+.participant-grid button,
 .paid-grid button {
   min-height: 58px;
-  border: 1px solid #d8ddd1;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f9fafb;
+  background: rgba(255, 255, 255, 0.06);
   display: grid;
   justify-items: start;
   padding: 10px;
 }
 
+.participant-grid button.selected,
 .paid-grid button.paid {
-  border-color: #86efac;
-  background: #ecfdf3;
+  border-color: rgba(250, 204, 21, 0.65);
+  background: rgba(250, 204, 21, 0.15);
 }
 
+.participant-grid span,
 .paid-grid span {
-  color: #111827;
+  color: #ffffff;
   font-weight: 900;
 }
 
+.participant-grid strong,
 .paid-grid strong {
-  color: #667085;
+  color: var(--muted);
   font-size: 0.78rem;
 }
 
+.participant-grid .selected strong,
 .paid-grid .paid strong {
-  color: #0f8b5f;
+  color: var(--yellow);
+}
+
+.team-card {
+  min-height: 112px;
+  padding: 12px;
+}
+
+.team-stack.compact {
+  margin-top: 0;
+}
+
+.team-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 11px;
+}
+
+.paid-check {
+  color: var(--yellow);
+}
+
+.number-row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-top: 12px;
+}
+
+.number-row span {
+  flex: 0 0 auto;
+  min-width: 43px;
+  height: 32px;
+  border-radius: 7px;
+  color: #ffffff;
+  background: #111827;
+  display: grid;
+  place-items: center;
+  font-size: 0.84rem;
+  font-weight: 900;
 }
 
 .result-grid {
@@ -582,6 +772,39 @@ button {
   margin-top: 10px;
 }
 
+.account-card {
+  min-height: 228px;
+  padding: 18px;
+  place-items: center;
+  text-align: center;
+}
+
+.account-card button {
+  min-width: 142px;
+  color: #ffffff;
+  background: var(--red);
+}
+
+.fairness-band {
+  min-height: 58px;
+  margin-top: 10px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+}
+
+.fairness-band svg {
+  color: var(--yellow);
+}
+
+.fairness-band p {
+  font-size: 0.82rem;
+  font-weight: 730;
+  line-height: 1.28;
+}
+
 .bottom-nav {
   position: fixed;
   right: 0;
@@ -591,12 +814,13 @@ button {
   max-width: 460px;
   margin: 0 auto;
   padding: 8px 10px max(8px, env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1px solid #dce1d5;
+  background: rgba(3, 7, 18, 0.94);
+  border-top: 1px solid var(--line);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
-  box-shadow: 0 -12px 30px rgba(17, 24, 39, 0.12);
+  box-shadow: 0 -18px 38px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(18px);
 }
 
 .bottom-nav button {
@@ -604,7 +828,7 @@ button {
   height: 56px;
   border: 0;
   border-radius: 8px;
-  color: #667085;
+  color: var(--muted);
   background: transparent;
   display: grid;
   place-items: center;
@@ -615,34 +839,43 @@ button {
 }
 
 .bottom-nav button.active {
-  color: #ffffff;
-  background: #111827;
+  color: #071018;
+  background: linear-gradient(135deg, var(--yellow), #ffffff);
 }
 
 @media (min-width: 720px) {
   body {
-    background: #111827;
+    background:
+      linear-gradient(90deg, #020617, #111827 40%, #171717),
+      repeating-linear-gradient(45deg, #111 0 18px, #fff 18px 36px);
   }
 
-  .app-shell {
+  .app-shell,
+  .login-shell {
     min-height: 920px;
-    box-shadow: 0 0 0 1px #303846, 0 30px 90px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 0 0 1px #303846, 0 30px 90px rgba(0, 0, 0, 0.55);
   }
 }
 
 @media (max-width: 380px) {
-  .race-strip {
-    grid-template-columns: 68px 1fr;
+  h1 {
+    font-size: 1.9rem;
   }
 
-  .track-art {
-    width: 68px;
-    border-width: 8px;
+  .topbar {
+    grid-template-columns: 1fr 84px;
   }
 
-  .pot-pill {
+  .nascar-badge img {
+    width: 66px;
+  }
+
+  .hero-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-metrics div:last-child {
     grid-column: 1 / -1;
-    width: fit-content;
   }
 
   .bottom-nav span {
