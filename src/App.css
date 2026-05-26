@@ -265,6 +265,7 @@ h3 {
 .history-row p,
 .history-row small,
 .live-card p,
+.scanner-card p,
 .leader-row p,
 .account-card p,
 .empty-state p {
@@ -294,6 +295,7 @@ h3 {
 .history-row,
 .message,
 .live-card,
+.scanner-card,
 .leader-row,
 .admin-panel,
 .team-card,
@@ -425,6 +427,31 @@ button {
   font-weight: 950;
 }
 
+.driver-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.driver-actions button,
+.listen-mini {
+  width: 38px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.driver-actions button:not(:disabled),
+.listen-mini {
+  color: #071018;
+  background: var(--yellow);
+}
+
+.driver-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .car-number {
   height: 50px;
   color: #ffffff;
@@ -531,10 +558,102 @@ button {
   font-weight: 900;
 }
 
-.live-card {
+.live-card,
+.scanner-card {
   padding: 14px;
   display: grid;
   gap: 12px;
+}
+
+.scanner-card {
+  margin-top: 12px;
+  background:
+    linear-gradient(135deg, rgba(250, 204, 21, 0.09), rgba(29, 78, 216, 0.12)),
+    var(--panel);
+}
+
+.scanner-chip {
+  color: #071018;
+  background: var(--yellow);
+}
+
+.global-scanner-audio {
+  position: relative;
+  z-index: 1;
+  display: none;
+  width: calc(100% - 28px);
+  height: 42px;
+  margin: 0 14px 12px;
+  border-radius: 8px;
+}
+
+.global-scanner-audio.visible {
+  display: block;
+}
+
+.scanner-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scanner-controls button,
+.scanner-grid button,
+.listen-mini,
+.driver-actions button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.scanner-controls button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.scanner-title {
+  margin: 2px 0 -2px;
+}
+
+.scanner-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scanner-grid button {
+  min-height: 58px;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 2px;
+  padding: 9px;
+}
+
+.scanner-grid button.active {
+  color: #071018;
+  background: linear-gradient(135deg, var(--yellow), #ffffff);
+}
+
+.scanner-grid span {
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.scanner-grid strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 900;
 }
 
 .live-topline {

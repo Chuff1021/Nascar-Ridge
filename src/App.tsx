@@ -6,9 +6,12 @@ import {
   CircleDot,
   Crown,
   Gauge,
+  Headphones,
   Lock,
   LogOut,
   MessageCircle,
+  Pause,
+  Play,
   Plus,
   RadioTower,
   RefreshCw,
@@ -17,9 +20,11 @@ import {
   Trophy,
   UserRound,
   UsersRound,
+  Volume2,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import type Hls from 'hls.js'
 import './App.css'
 
 type View = 'garage' | 'league' | 'live' | 'chat' | 'admin' | 'account'
@@ -85,6 +90,14 @@ type LiveRace = {
   raceId?: number
   vehicles: LiveVehicle[]
   updatedAt: string
+}
+
+type AudioChannel = {
+  streamNumber: number
+  driverNumber: string
+  driverName: string
+  url: string
+  requiresAuth: boolean
 }
 
 const STORAGE_KEY = 'shuyler-ridge-raceday-v3-state'
@@ -417,6 +430,35 @@ function normalizeLiveRace(data: unknown): LiveRace {
   }
 }
 
+function normalizeAudioChannels(data: unknown): AudioChannel[] {
+  const mapping = data as {
+    audio_config?: Array<{
+      stream_number?: number
+      driver_number?: string
+      driver_name?: string
+      base_url?: string
+      stream_ios?: string
+      stream_safari?: string
+      requiresAuth?: boolean
+    }>
+  }
+
+  return (mapping.audio_config ?? [])
+    .map((channel) => {
+      const baseUrl = channel.base_url ?? ''
+      const streamPath = channel.stream_ios ?? channel.stream_safari ?? ''
+
+      return {
+        streamNumber: channel.stream_number ?? 0,
+        driverNumber: channel.driver_number ?? '',
+        driverName: channel.driver_name ?? 'Unknown',
+        url: streamPath.startsWith('http') ? streamPath : `${baseUrl}${streamPath}`,
+        requiresAuth: Boolean(channel.requiresAuth),
+      }
+    })
+    .filter((channel) => channel.driverNumber && channel.url)
+}
+
 function getLiveVehicle(liveRace: LiveRace | undefined, driver: Driver) {
   return liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
 }
@@ -425,7 +467,13 @@ function startingPositionLabel(vehicle: LiveVehicle | undefined) {
   return vehicle?.startingPosition ? `Start ${vehicle.startingPosition}` : 'Start --'
 }
 
+function scannerLabel(channel: AudioChannel) {
+  return channel.driverNumber === 'All Scan' ? 'All Scan' : `#${channel.driverNumber} ${channel.driverName}`
+}
+
 function App() {
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hlsRef = useRef<Hls | null>(null)
   const [state, setState] = useState<AppState>(() => {
     const loaded = loadState()
     return { ...loaded, currentUserId: loadSession() ?? loaded.currentUserId }
@@ -438,6 +486,11 @@ function App() {
   const [newWeekName, setNewWeekName] = useState('')
   const [liveRace, setLiveRace] = useState<LiveRace>()
   const [liveStatus, setLiveStatus] = useState('Connecting to NASCAR timing...')
+  const [audioChannels, setAudioChannels] = useState<AudioChannel[]>([])
+  const [scannerStatus, setScannerStatus] = useState('Loading NASCAR scanner channels...')
+  const [activeAudio, setActiveAudio] = useState<AudioChannel>()
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
+  const [audioError, setAudioError] = useState('')
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const currentUser = state.players.find((player) => player.id === state.currentUserId)
@@ -452,6 +505,13 @@ function App() {
   const myLiveCars = liveRace?.vehicles.filter((vehicle) =>
     myDrivers.some((driver) => driver.number === vehicle.vehicleNumber),
   )
+  const allScanChannel = audioChannels.find((channel) => channel.driverNumber === 'All Scan')
+  const myAudioChannels = myDrivers
+    .map((driver) => audioChannels.find((channel) => channel.driverNumber === driver.number))
+    .filter((channel): channel is AudioChannel => Boolean(channel))
+  const liveAudioChannels = (liveRace?.vehicles ?? [])
+    .map((vehicle) => audioChannels.find((channel) => channel.driverNumber === vehicle.vehicleNumber))
+    .filter((channel): channel is AudioChannel => Boolean(channel))
 
   useEffect(() => {
     let active = true
@@ -481,6 +541,81 @@ function App() {
     return () => {
       active = false
       window.clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadAudioChannels() {
+      try {
+        const response = await fetch('/api/audio-mapping', { cache: 'no-store' })
+        if (!response.ok) {
+          throw new Error(`Scanner mapping returned ${response.status}`)
+        }
+
+        const data = await response.json()
+        const channels = normalizeAudioChannels(data)
+
+        if (active) {
+          setAudioChannels(channels)
+          setScannerStatus(
+            channels.length > 0
+              ? `${channels.length} NASCAR scanner channels loaded`
+              : 'Scanner channels are waiting for the next live NASCAR session.',
+          )
+        }
+      } catch {
+        if (active) {
+          setScannerStatus('Scanner mapping is unavailable right now.')
+        }
+      }
+    }
+
+    loadAudioChannels()
+    const timer = window.setInterval(loadAudioChannels, 60000)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) {
+      return undefined
+    }
+
+    function handlePlay() {
+      setIsAudioPlaying(true)
+    }
+
+    function handlePause() {
+      setIsAudioPlaying(false)
+    }
+
+    function handleError() {
+      setIsAudioPlaying(false)
+      setAudioError('That scanner stream could not play. It may require NASCAR account access or an active race session.')
+    }
+
+    audio.addEventListener('play', handlePlay)
+    audio.addEventListener('pause', handlePause)
+    audio.addEventListener('ended', handlePause)
+    audio.addEventListener('error', handleError)
+
+    return () => {
+      audio.removeEventListener('play', handlePlay)
+      audio.removeEventListener('pause', handlePause)
+      audio.removeEventListener('ended', handlePause)
+      audio.removeEventListener('error', handleError)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      hlsRef.current?.destroy()
     }
   }, [])
 
@@ -617,6 +752,66 @@ function App() {
     setView('garage')
   }
 
+  async function playScanner(channel: AudioChannel) {
+    const audio = audioRef.current
+    if (!audio) {
+      return
+    }
+
+    setAudioError('')
+    setActiveAudio(channel)
+    hlsRef.current?.destroy()
+    hlsRef.current = null
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.load()
+
+    try {
+      const { default: HlsPlayer } = await import('hls.js')
+
+      if (HlsPlayer.isSupported()) {
+        const hls = new HlsPlayer({
+          enableWorker: true,
+          liveSyncDurationCount: 2,
+        })
+
+        hls.on(HlsPlayer.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            setAudioError('Scanner stream failed. It may be offline, auth-gated, or between live sessions.')
+            setIsAudioPlaying(false)
+            hls.destroy()
+            hlsRef.current = null
+          }
+        })
+
+        hls.loadSource(channel.url)
+        hls.attachMedia(audio)
+        hlsRef.current = hls
+        await audio.play()
+        return
+      }
+
+      if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+        audio.src = channel.url
+        await audio.play()
+        return
+      }
+
+      setAudioError('This browser cannot play NASCAR HLS scanner streams.')
+    } catch {
+      setAudioError('Tap play again after the scanner loads, or try during a live NASCAR session.')
+      setIsAudioPlaying(false)
+    }
+  }
+
+  function stopScanner() {
+    const audio = audioRef.current
+    audio?.pause()
+    hlsRef.current?.destroy()
+    hlsRef.current = null
+    setIsAudioPlaying(false)
+  }
+
   const pot = activeWeek.paidBy.length * 5
   const winnerPayout = Math.max(0, pot - 5)
   const participantCount = activeWeek.participantIds.length
@@ -697,6 +892,8 @@ function App() {
         </div>
       </section>
 
+      <audio ref={audioRef} className={`global-scanner-audio ${activeAudio ? 'visible' : ''}`} controls playsInline />
+
       {activeView === 'garage' && currentUser && (
         <section className="screen">
           <div className="garage-banner">
@@ -730,6 +927,7 @@ function App() {
             <div className="driver-list">
               {myDrivers.map((driver) => {
                 const liveCar = getLiveVehicle(liveRace, driver)
+                const channel = audioChannels.find((item) => item.driverNumber === driver.number)
 
                 return (
                   <article className="driver-card" key={`${driver.number}-${driver.name}`}>
@@ -740,7 +938,17 @@ function App() {
                         {driver.team} / {startingPositionLabel(liveCar)}
                       </p>
                     </div>
-                    {liveCar && <strong>P{liveCar.position}</strong>}
+                    <div className="driver-actions">
+                      {liveCar && <strong>P{liveCar.position}</strong>}
+                      <button
+                        type="button"
+                        onClick={() => channel && playScanner(channel)}
+                        disabled={!channel}
+                        aria-label={`Listen to ${driver.name}`}
+                      >
+                        <Headphones size={16} />
+                      </button>
+                    </div>
                   </article>
                 )
               })}
@@ -886,6 +1094,76 @@ function App() {
             )}
           </div>
 
+          <div className="scanner-card">
+            <div className="live-topline">
+              <div>
+                <p className="eyebrow">Live driver radio</p>
+                <h2>{activeAudio ? scannerLabel(activeAudio) : 'Scanner ready'}</h2>
+              </div>
+              <div className="flag-chip scanner-chip">
+                <Volume2 size={14} />
+                {isAudioPlaying ? 'Live' : 'Idle'}
+              </div>
+            </div>
+
+            <p>{audioError || scannerStatus}</p>
+
+            <div className="scanner-controls">
+              {activeAudio && (
+                <button type="button" onClick={isAudioPlaying ? stopScanner : () => playScanner(activeAudio)}>
+                  {isAudioPlaying ? <Pause size={17} /> : <Play size={17} />}
+                  {isAudioPlaying ? 'Stop' : 'Resume'}
+                </button>
+              )}
+              {allScanChannel && (
+                <button type="button" onClick={() => playScanner(allScanChannel)}>
+                  <RadioTower size={17} />
+                  All Scan
+                </button>
+              )}
+            </div>
+
+            {myAudioChannels.length > 0 && (
+              <>
+                <div className="mini-title scanner-title">
+                  <Headphones size={18} />
+                  Your drivers
+                </div>
+                <div className="scanner-grid">
+                  {myAudioChannels.map((channel) => (
+                    <button
+                      className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                      type="button"
+                      key={`my-${channel.driverNumber}`}
+                      onClick={() => playScanner(channel)}
+                    >
+                      <span>{channel.driverNumber === 'All Scan' ? 'ALL' : `#${channel.driverNumber}`}</span>
+                      <strong>{channel.driverName}</strong>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="mini-title scanner-title">
+              <RadioTower size={18} />
+              Track channels
+            </div>
+            <div className="scanner-grid">
+              {liveAudioChannels.slice(0, 18).map((channel) => (
+                <button
+                  className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                  type="button"
+                  key={`live-${channel.driverNumber}`}
+                  onClick={() => playScanner(channel)}
+                >
+                  <span>#{channel.driverNumber}</span>
+                  <strong>{channel.driverName}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="leaderboard">
             {(liveRace?.vehicles.slice(0, 12) ?? []).map((vehicle) => (
               <article className="leader-row" key={`${vehicle.position}-${vehicle.vehicleNumber}`}>
@@ -898,6 +1176,21 @@ function App() {
                     {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
                   </p>
                 </div>
+                {audioChannels.some((channel) => channel.driverNumber === vehicle.vehicleNumber) && (
+                  <button
+                    className="listen-mini"
+                    type="button"
+                    onClick={() => {
+                      const channel = audioChannels.find((item) => item.driverNumber === vehicle.vehicleNumber)
+                      if (channel) {
+                        playScanner(channel)
+                      }
+                    }}
+                    aria-label={`Listen to ${vehicle.driverName}`}
+                  >
+                    <Headphones size={16} />
+                  </button>
+                )}
               </article>
             ))}
           </div>

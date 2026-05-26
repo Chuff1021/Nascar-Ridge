@@ -13,6 +13,7 @@ Shuyler Ridge Raceday is a phone-first NASCAR driver draw app for a weekly frien
 - Keep season standings, result history, weekly lineups, and local trash talk chat.
 - Poll a Vercel API route for NASCAR live timing data and show the current leaderboard when available.
 - Show car number, driver name, and NASCAR feed starting position when timing data includes it.
+- Load NASCAR scanner channel mappings through `/api/audio-mapping` and play available HLS driver radio feeds with `hls.js`.
 - Install as a PWA on iPhone and Android from the browser.
 
 Prototype league code: `raceday`
