@@ -407,9 +407,21 @@ button {
   min-height: 78px;
   padding: 12px;
   display: grid;
-  grid-template-columns: 74px 1fr auto;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+}
+
+.driver-card strong {
+  min-width: 44px;
+  min-height: 34px;
+  color: #071018;
+  background: var(--yellow);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 0.86rem;
+  font-weight: 950;
 }
 
 .car-number {
@@ -494,6 +506,14 @@ button {
 
 .history-list {
   margin-top: 16px;
+}
+
+.lineup-section {
+  margin-top: 16px;
+}
+
+.compact-head {
+  min-height: 70px;
 }
 
 .history-row {
@@ -760,6 +780,67 @@ button {
   place-items: center;
   font-size: 0.84rem;
   font-weight: 900;
+}
+
+.lineup-card {
+  display: grid;
+  gap: 11px;
+}
+
+.lineup-driver-list {
+  display: grid;
+  gap: 7px;
+}
+
+.lineup-driver {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.lineup-driver span {
+  min-height: 28px;
+  color: #ffffff;
+  background: #030712;
+  border-left: 5px solid var(--red);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.lineup-driver strong {
+  color: #ffffff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.lineup-driver small {
+  color: #071018;
+  background: var(--yellow);
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  min-height: 28px;
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.lineup-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 720;
 }
 
 .result-grid {

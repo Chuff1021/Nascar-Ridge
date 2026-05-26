@@ -71,6 +71,7 @@ type LiveVehicle = {
   vehicleNumber: string
   driverName: string
   manufacturer?: string
+  startingPosition?: number
   lapsCompleted: number
   lastLapSpeed?: number
   delta?: string
@@ -86,7 +87,7 @@ type LiveRace = {
   updatedAt: string
 }
 
-const STORAGE_KEY = 'shuyler-ridge-raceday-v2-state'
+const STORAGE_KEY = 'shuyler-ridge-raceday-v3-state'
 const SESSION_KEY = 'shuyler-ridge-raceday-session'
 const INVITE_CODE = 'raceday'
 
@@ -143,8 +144,34 @@ const drivers: Driver[] = [
 
 const allPlayerIds = players.map((player) => player.id)
 
+const remainingCupSchedule = [
+  { id: 'w5', race: 'Nashville', track: 'Nashville Superspeedway', date: 'May 31' },
+  { id: 'w6', race: 'Michigan', track: 'Michigan International Speedway', date: 'Jun 7' },
+  { id: 'w7', race: 'Pocono', track: 'Pocono Raceway', date: 'Jun 14' },
+  { id: 'w8', race: 'San Diego', track: 'Naval Base Coronado', date: 'Jun 21' },
+  { id: 'w9', race: 'Sonoma', track: 'Sonoma Raceway', date: 'Jun 28' },
+  { id: 'w10', race: 'Chicagoland', track: 'Chicagoland Speedway', date: 'Jul 5' },
+  { id: 'w11', race: 'EchoPark Atlanta', track: 'EchoPark Speedway', date: 'Jul 12' },
+  { id: 'w12', race: 'North Wilkesboro', track: 'North Wilkesboro Speedway', date: 'Jul 19' },
+  { id: 'w13', race: 'Indianapolis', track: 'Indianapolis Motor Speedway', date: 'Jul 26' },
+  { id: 'w14', race: 'Iowa', track: 'Iowa Speedway', date: 'Aug 9' },
+  { id: 'w15', race: 'Richmond', track: 'Richmond Raceway', date: 'Aug 15' },
+  { id: 'w16', race: 'New Hampshire', track: 'New Hampshire Motor Speedway', date: 'Aug 23' },
+  { id: 'w17', race: 'Daytona', track: 'Daytona International Speedway', date: 'Aug 29' },
+  { id: 'w18', race: 'Darlington', track: 'Darlington Raceway', date: 'Sep 6' },
+  { id: 'w19', race: 'WWTR St. Louis', track: 'World Wide Technology Raceway', date: 'Sep 13' },
+  { id: 'w20', race: 'Bristol Night Race', track: 'Bristol Motor Speedway', date: 'Sep 19' },
+  { id: 'w21', race: 'Kansas', track: 'Kansas Speedway', date: 'Sep 27' },
+  { id: 'w22', race: 'Las Vegas', track: 'Las Vegas Motor Speedway', date: 'Oct 4' },
+  { id: 'w23', race: 'Charlotte Roval', track: 'Charlotte Motor Speedway Road Course', date: 'Oct 11' },
+  { id: 'w24', race: 'Phoenix', track: 'Phoenix Raceway', date: 'Oct 18' },
+  { id: 'w25', race: 'Talladega', track: 'Talladega Superspeedway', date: 'Oct 25' },
+  { id: 'w26', race: 'Martinsville', track: 'Martinsville Speedway', date: 'Nov 1' },
+  { id: 'w27', race: 'Homestead-Miami Championship', track: 'Homestead-Miami Speedway', date: 'Nov 8' },
+]
+
 const starterState: AppState = {
-  activeWeekId: 'w4',
+  activeWeekId: 'w5',
   players,
   weeks: [
     createSeedWeek('w1', 'Daytona 500', 'Daytona International Speedway', 'Feb 15', 'cody', 'emily'),
@@ -154,11 +181,12 @@ const starterState: AppState = {
       id: 'w4',
       race: 'Coca-Cola 600',
       track: 'Charlotte Motor Speedway',
-      date: 'May 31',
+      date: 'May 24',
       participantIds: allPlayerIds,
-      paidBy: ['cody', 'emily', 'cory', 'sku', 'tyler'],
+      paidBy: allPlayerIds,
       assignments: dealDrivers(players, allPlayerIds, 'w4-ready'),
     },
+    ...remainingCupSchedule.map((race) => createOpenWeek(race.id, race.race, race.track, race.date)),
   ],
   messages: [
     {
@@ -217,6 +245,18 @@ function createSeedWeek(
     assignments: dealDrivers(players, allPlayerIds, id),
     winnerId,
     secondId,
+  }
+}
+
+function createOpenWeek(id: string, race: string, track: string, date: string): Week {
+  return {
+    id,
+    race,
+    track,
+    date,
+    participantIds: allPlayerIds,
+    paidBy: [],
+    assignments: Object.fromEntries(players.map((player) => [player.id, [] as Driver[]])),
   }
 }
 
@@ -347,6 +387,7 @@ function normalizeLiveRace(data: unknown): LiveRace {
       running_position?: number
       vehicle_number?: string
       vehicle_manufacturer?: string
+      starting_position?: number
       laps_completed?: number
       last_lap_speed?: number
       delta?: string
@@ -367,12 +408,21 @@ function normalizeLiveRace(data: unknown): LiveRace {
         vehicleNumber: vehicle.vehicle_number ?? '--',
         driverName: vehicle.driver?.full_name ?? 'Unknown driver',
         manufacturer: vehicle.vehicle_manufacturer,
+        startingPosition: vehicle.starting_position,
         lapsCompleted: vehicle.laps_completed ?? 0,
         lastLapSpeed: vehicle.last_lap_speed,
         delta: vehicle.delta,
       }))
       .sort((a, b) => a.position - b.position),
   }
+}
+
+function getLiveVehicle(liveRace: LiveRace | undefined, driver: Driver) {
+  return liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
+}
+
+function startingPositionLabel(vehicle: LiveVehicle | undefined) {
+  return vehicle?.startingPosition ? `Start ${vehicle.startingPosition}` : 'Start --'
 }
 
 function App() {
@@ -439,7 +489,11 @@ function App() {
       .map((player) => {
         const wins = state.weeks.filter((week) => week.winnerId === player.id).length
         const seconds = state.weeks.filter((week) => week.secondId === player.id).length
-        const starts = state.weeks.filter((week) => week.participantIds.includes(player.id)).length
+        const starts = state.weeks.filter(
+          (week) =>
+            week.participantIds.includes(player.id) &&
+            (Boolean(week.winnerId) || Object.values(week.assignments).some((assigned) => assigned.length > 0)),
+        ).length
         const paid = state.weeks.filter((week) => week.paidBy.includes(player.id)).length
         const moneyBack = seconds * 5
         const winnings = state.weeks.reduce((total, week) => {
@@ -676,14 +730,16 @@ function App() {
           ) : (
             <div className="driver-list">
               {myDrivers.map((driver) => {
-                const liveCar = liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
+                const liveCar = getLiveVehicle(liveRace, driver)
 
                 return (
                   <article className="driver-card" key={`${driver.number}-${driver.name}`}>
                     <div className="car-number">#{driver.number}</div>
                     <div>
                       <h3>{driver.name}</h3>
-                      <p>{driver.team}</p>
+                      <p>
+                        {driver.team} / {startingPositionLabel(liveCar)}
+                      </p>
                     </div>
                     {liveCar && <strong>P{liveCar.position}</strong>}
                   </article>
@@ -736,6 +792,54 @@ function App() {
                 <strong>{formatCurrency(player.winnings + player.moneyBack)}</strong>
               </article>
             ))}
+          </div>
+
+          <div className="lineup-section">
+            <div className="section-head dark compact-head">
+              <div>
+                <p className="eyebrow">This week's teams</p>
+                <h2>Who has what racers</h2>
+              </div>
+              <UsersRound size={22} />
+            </div>
+
+            <div className="team-stack">
+              {participants.map((player) => (
+                <article className="team-card lineup-card" key={player.id}>
+                  <div className="team-card-head">
+                    <div className="avatar" style={{ background: player.color }}>
+                      {player.name.slice(0, 1)}
+                    </div>
+                    <div>
+                      <h3>{player.name}</h3>
+                      <p>
+                        {(activeWeek.assignments[player.id] ?? []).length || 0} racers /{' '}
+                        {activeWeek.paidBy.includes(player.id) ? 'paid' : '$5 due'}
+                      </p>
+                    </div>
+                    {activeWeek.paidBy.includes(player.id) && <Check className="paid-check" size={18} />}
+                  </div>
+
+                  {(activeWeek.assignments[player.id] ?? []).length > 0 ? (
+                    <div className="lineup-driver-list">
+                      {(activeWeek.assignments[player.id] ?? []).map((driver) => {
+                        const liveCar = getLiveVehicle(liveRace, driver)
+
+                        return (
+                          <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
+                            <span>#{driver.number}</span>
+                            <strong>{driver.name}</strong>
+                            <small>{startingPositionLabel(liveCar)}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="lineup-empty">Waiting on Cody to draw this race.</p>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className="history-list">
@@ -791,7 +895,7 @@ function App() {
                 <div>
                   <h3>{vehicle.driverName}</h3>
                   <p>
-                    Lap {vehicle.lapsCompleted}
+                    {vehicle.startingPosition ? `Started ${vehicle.startingPosition}, ` : ''}Lap {vehicle.lapsCompleted}
                     {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
                   </p>
                 </div>
@@ -937,11 +1041,23 @@ function App() {
                     </div>
                     {activeWeek.paidBy.includes(player.id) && <Check className="paid-check" size={18} />}
                   </div>
-                  <div className="number-row">
-                    {(activeWeek.assignments[player.id] ?? []).map((driver) => (
-                      <span key={`${player.id}-${driver.number}`}>#{driver.number}</span>
-                    ))}
-                  </div>
+                  {(activeWeek.assignments[player.id] ?? []).length > 0 ? (
+                    <div className="lineup-driver-list">
+                      {(activeWeek.assignments[player.id] ?? []).map((driver) => {
+                        const liveCar = getLiveVehicle(liveRace, driver)
+
+                        return (
+                          <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
+                            <span>#{driver.number}</span>
+                            <strong>{driver.name}</strong>
+                            <small>{startingPositionLabel(liveCar)}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="lineup-empty">Not drawn yet.</p>
+                  )}
                 </article>
               ))}
             </div>
