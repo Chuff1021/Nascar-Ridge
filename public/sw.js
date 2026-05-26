@@ -1,11 +1,12 @@
-const CACHE_NAME = 'shuyler-ridge-raceday-v5'
+const CACHE_NAME = 'shuyler-ridge-raceday-v6'
 const ASSETS = [
   '/',
   '/manifest.webmanifest',
-  '/app-icon.svg',
+  '/app-icon.png',
   '/apple-touch-icon.png',
+  '/shuyler-ridge-logo.png',
+  '/shuyler-ridge-logo-header.png',
   '/nascar-logo.svg',
-  '/shuyler-ridge-logo.svg',
 ]
 
 self.addEventListener('install', (event) => {

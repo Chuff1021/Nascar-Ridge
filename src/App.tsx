@@ -627,7 +627,7 @@ function App() {
       <main className="login-shell">
         <section className="login-card">
           <div className="logo-stage">
-            <img src="/shuyler-ridge-logo.svg" alt="Shuyler Ridge Raceday" />
+            <img src="/shuyler-ridge-logo-header.png" alt="Shuyler Ridge Raceday" />
           </div>
           <div className="nascar-lockup">
             <span>Fantasy sports app</span>
@@ -669,7 +669,7 @@ function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="logo-plate">
-          <img className="sr-wordmark" src="/shuyler-ridge-logo.svg" alt="Shuyler Ridge Raceday" />
+          <img className="sr-wordmark" src="/shuyler-ridge-logo-header.png" alt="Shuyler Ridge Raceday" />
         </div>
       </header>
 
