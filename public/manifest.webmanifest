@@ -1,0 +1,19 @@
+{
+  "name": "Shuyler Ridge Raceday",
+  "short_name": "Raceday",
+  "description": "A weekly NASCAR driver draw and standings app for friends.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111827",
+  "theme_color": "#d92525",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
