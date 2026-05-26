@@ -111,13 +111,13 @@ const SESSION_KEY = 'shuyler-ridge-raceday-session'
 const INVITE_CODE = 'raceday'
 
 const players: Player[] = [
-  { id: 'cody', name: 'Cody', handle: 'Commissioner', color: '#ef233c', passcode: 'raceday', isAdmin: true },
+  { id: 'cody', name: 'Cody', handle: 'Pole Sitter', color: '#ef233c', passcode: 'raceday' },
   { id: 'emily', name: 'Emily', handle: 'High Line', color: '#1d4ed8', passcode: 'raceday' },
   { id: 'cory', name: 'Cory', handle: 'Bumper Tag', color: '#facc15', passcode: 'raceday' },
   { id: 'sku', name: 'Sku', handle: 'Pit Wizard', color: '#7c3aed', passcode: 'raceday' },
   { id: 'tyler', name: 'Tyler', handle: 'Wide Open', color: '#0f8b5f', passcode: 'raceday' },
   { id: 'hillary', name: 'Hillary', handle: 'Draft Queen', color: '#ec4899', passcode: 'raceday' },
-  { id: 'colton', name: 'Colton', handle: 'Final Lap', color: '#0891b2', passcode: 'raceday' },
+  { id: 'colton', name: 'Colton', handle: 'Commissioner', color: '#0891b2', passcode: 'raceday', isAdmin: true },
   { id: 'shannon', name: 'Shannon', handle: 'Loose Lug', color: '#f97316', passcode: 'raceday' },
   { id: 'nate', name: 'Nate', handle: 'Short Track', color: '#334155', passcode: 'raceday' },
   { id: 'lundy', name: 'Lundy', handle: 'Wall Rider', color: '#84cc16', passcode: 'raceday' },
@@ -238,9 +238,24 @@ function loadState(): AppState {
   }
 
   try {
-    return JSON.parse(saved) as AppState
+    return normalizeSavedState(JSON.parse(saved) as AppState)
   } catch {
     return starterState
+  }
+}
+
+function normalizeSavedState(saved: AppState): AppState {
+  const canonicalIds = new Set(players.map((player) => player.id))
+
+  return {
+    ...saved,
+    players,
+    weeks: saved.weeks.map((week) => ({
+      ...week,
+      participantIds: week.participantIds.filter((id) => canonicalIds.has(id)),
+      paidBy: week.paidBy.filter((id) => canonicalIds.has(id)),
+      assignments: Object.fromEntries(players.map((player) => [player.id, week.assignments[player.id] ?? []])),
+    })),
   }
 }
 
@@ -440,6 +455,16 @@ function hasDraw(week: Week) {
   return Object.values(week.assignments).some((assigned) => assigned.length > 0)
 }
 
+function isLiveTimingActive(race: LiveRace | undefined) {
+  if (!race) {
+    return false
+  }
+
+  const isCompleted = race.lapsInRace > 0 && race.lapNumber >= race.lapsInRace && race.lapsToGo === 0
+
+  return race.flagState !== 9 && !isCompleted
+}
+
 function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -464,6 +489,7 @@ function App() {
   const [audioError, setAudioError] = useState('')
   const [canInstall, setCanInstall] = useState(false)
   const [isRefreshingLive, setIsRefreshingLive] = useState(false)
+  const [showInstallHelp, setShowInstallHelp] = useState(false)
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
@@ -480,26 +506,36 @@ function App() {
   const selectedLiveDrawn = hasDraw(selectedLiveWeek)
   const activeWeekIndex = state.weeks.findIndex((week) => week.id === activeWeek.id)
   const selectedLiveWeekIndex = state.weeks.findIndex((week) => week.id === selectedLiveWeek.id)
+  const selectedLiveStatus =
+    selectedLiveWeekIndex < activeWeekIndex
+      ? 'Past Race'
+      : selectedLiveWeek.id === activeWeek.id
+        ? 'Active Week'
+        : 'Upcoming'
   const pastWeeks = state.weeks.slice(0, Math.max(0, activeWeekIndex)).reverse()
   const futureWeeks = state.weeks.slice(Math.max(0, activeWeekIndex + 1))
-  const myLiveCars = liveRace?.vehicles.filter((vehicle) =>
+  const activeLiveRace = isLiveTimingActive(liveRace) ? liveRace : undefined
+  const selectedRaceLive = selectedLiveWeek.id === activeWeek.id ? activeLiveRace : undefined
+  const myLiveCars = activeLiveRace?.vehicles.filter((vehicle) =>
     myDrivers.some((driver) => driver.number === vehicle.vehicleNumber),
   )
   const allScanChannel = audioChannels.find((channel) => channel.driverNumber === 'All Scan')
   const myAudioChannels = myDrivers
     .map((driver) => audioChannels.find((channel) => channel.driverNumber === driver.number))
     .filter((channel): channel is AudioChannel => Boolean(channel))
-  const liveAudioChannels = (liveRace?.vehicles ?? [])
+  const liveAudioChannels = (activeLiveRace?.vehicles ?? [])
     .map((vehicle) => audioChannels.find((channel) => channel.driverNumber === vehicle.vehicleNumber))
     .filter((channel): channel is AudioChannel => Boolean(channel))
-  const liveVehicles = liveRace?.vehicles ?? []
-  const liveLeader = liveVehicles[0]
-  const liveProgress = liveRace?.lapsInRace ? Math.min(100, (liveRace.lapNumber / liveRace.lapsInRace) * 100) : 0
+  const liveVehicles = selectedRaceLive?.vehicles ?? []
+  const liveLeader = selectedRaceLive?.vehicles[0]
+  const liveProgress = selectedRaceLive?.lapsInRace
+    ? Math.min(100, (selectedRaceLive.lapNumber / selectedRaceLive.lapsInRace) * 100)
+    : 0
   const projectedPoolStandings = selectedLiveParticipants
     .map((player) => {
       const assigned = selectedLiveWeek.assignments[player.id] ?? []
       const liveCars = assigned
-        .map((driver) => getLiveVehicle(liveRace, driver))
+        .map((driver) => getLiveVehicle(selectedRaceLive, driver))
         .filter((vehicle): vehicle is LiveVehicle => Boolean(vehicle))
       const bestPosition = liveCars.length > 0 ? Math.min(...liveCars.map((vehicle) => vehicle.position)) : undefined
       const bestCar = liveCars.find((vehicle) => vehicle.position === bestPosition)
@@ -520,8 +556,13 @@ function App() {
 
         const data = await response.json()
         if (active) {
-          setLiveRace(normalizeLiveRace(data))
-          setLiveStatus('Live NASCAR timing feed')
+          const normalizedRace = normalizeLiveRace(data)
+          setLiveRace(normalizedRace)
+          setLiveStatus(
+            isLiveTimingActive(normalizedRace)
+              ? 'Live NASCAR timing feed'
+              : 'NASCAR timing is not live for this race yet.',
+          )
         }
       } catch {
         if (active) {
@@ -828,8 +869,13 @@ function App() {
       ])
 
       if (raceResponse.ok) {
-        setLiveRace(normalizeLiveRace(await raceResponse.json()))
-        setLiveStatus('Live NASCAR timing feed')
+        const normalizedRace = normalizeLiveRace(await raceResponse.json())
+        setLiveRace(normalizedRace)
+        setLiveStatus(
+          isLiveTimingActive(normalizedRace)
+            ? 'Live NASCAR timing feed'
+            : 'NASCAR timing is not live for this race yet.',
+        )
       }
 
       if (audioResponse.ok) {
@@ -851,6 +897,7 @@ function App() {
   async function installApp() {
     const prompt = installPromptRef.current
     if (!prompt) {
+      setShowInstallHelp(true)
       return
     }
 
@@ -858,6 +905,15 @@ function App() {
     await prompt.userChoice
     installPromptRef.current = null
     setCanInstall(false)
+  }
+
+  function handleInstallTap() {
+    if (canInstall) {
+      void installApp()
+      return
+    }
+
+    setShowInstallHelp((current) => !current)
   }
 
   const pot = activeWeek.paidBy.length * 5
@@ -917,9 +973,9 @@ function App() {
         <div className="app-status-bar">
           <div>
             <CircleDot size={10} />
-            {liveRace ? `${flagLabel(liveRace.flagState)} flag` : 'Race standby'}
+            {activeLiveRace ? `${flagLabel(activeLiveRace.flagState)} flag` : 'Race standby'}
           </div>
-          <div>{liveRace ? `Updated ${liveRace.updatedAt}` : 'PWA ready'}</div>
+          <div>{liveRace ? `Checked ${liveRace.updatedAt}` : 'PWA ready'}</div>
         </div>
       </header>
 
@@ -942,7 +998,7 @@ function App() {
           </div>
           <div>
             <span>Flag</span>
-            <strong>{liveRace ? flagLabel(liveRace.flagState) : 'Standby'}</strong>
+            <strong>{activeLiveRace ? flagLabel(activeLiveRace.flagState) : 'Standby'}</strong>
           </div>
         </div>
         <div className="track-lighting" aria-hidden="true" />
@@ -980,22 +1036,41 @@ function App() {
             </article>
           </div>
 
+          <div className="install-card">
+            <div>
+              <p className="eyebrow">Home Screen app</p>
+              <h3>Install Shuyler Ridge Raceday</h3>
+              <p>Open it full screen from your phone like a real app.</p>
+            </div>
+            <button type="button" onClick={handleInstallTap}>
+              <Download size={18} />
+              Add app
+            </button>
+          </div>
+
+          {showInstallHelp && (
+            <div className="install-help">
+              <strong>iPhone:</strong> tap Share, then Add to Home Screen. <strong>Android:</strong> tap Add app or
+              Install from Chrome.
+            </div>
+          )}
+
           {!activeWeek.participantIds.includes(currentUser.id) ? (
             <div className="empty-state">
               <UsersRound size={28} />
               <h3>Not in this week's lineup</h3>
-              <p>Cody can add you from Admin before the draw.</p>
+              <p>Colton can add you from Admin before the draw.</p>
             </div>
           ) : myDrivers.length === 0 ? (
             <div className="empty-state">
               <RefreshCw size={28} />
               <h3>Waiting on the commissioner draw</h3>
-              <p>Your cars will appear after Cody draws the weekly teams.</p>
+              <p>Your cars will appear after Colton draws the weekly teams.</p>
             </div>
           ) : (
             <div className="driver-list">
               {myDrivers.map((driver) => {
-                const liveCar = getLiveVehicle(liveRace, driver)
+                const liveCar = getLiveVehicle(activeLiveRace, driver)
                 const channel = audioChannels.find((item) => item.driverNumber === driver.number)
 
                 return (
@@ -1099,7 +1174,7 @@ function App() {
                   {(activeWeek.assignments[player.id] ?? []).length > 0 ? (
                     <div className="lineup-driver-list">
                       {(activeWeek.assignments[player.id] ?? []).map((driver) => {
-                        const liveCar = getLiveVehicle(liveRace, driver)
+                        const liveCar = getLiveVehicle(activeLiveRace, driver)
 
                         return (
                           <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
@@ -1111,7 +1186,7 @@ function App() {
                       })}
                     </div>
                   ) : (
-                    <p className="lineup-empty">Waiting on Cody to draw this race.</p>
+                    <p className="lineup-empty">Waiting on Colton to draw this race.</p>
                   )}
                 </article>
               ))}
@@ -1155,13 +1230,7 @@ function App() {
                 ))}
               </select>
             </label>
-            <div className="race-status-pill">
-              {selectedLiveWeekIndex < activeWeekIndex
-                ? 'Past Race'
-                : selectedLiveWeek.id === activeWeek.id
-                  ? 'Active Week'
-                  : 'Upcoming'}
-            </div>
+            <div className="race-status-pill">{selectedLiveStatus}</div>
           </div>
 
           <div className="live-card race-broadcast-card">
@@ -1171,12 +1240,12 @@ function App() {
                 <h2>{selectedLiveWeek.race}</h2>
                 <span>{selectedLiveWeek.track}</span>
               </div>
-              <div className={`flag-chip flag-${liveRace?.flagState ?? 9}`}>
+              <div className={`flag-chip flag-${selectedRaceLive?.flagState ?? 9}`}>
                 <CircleDot size={14} />
-                {liveRace ? flagLabel(liveRace.flagState) : 'Standby'}
+                {selectedRaceLive ? flagLabel(selectedRaceLive.flagState) : selectedLiveStatus}
               </div>
             </div>
-            {liveLeader && selectedLiveWeek.id === activeWeek.id && (
+            {liveLeader && selectedRaceLive && (
               <div className="leader-feature">
                 <span>Overall leader</span>
                 <strong>
@@ -1192,10 +1261,10 @@ function App() {
               {selectedLiveWeek.id === activeWeek.id
                 ? liveStatus
                 : selectedLiveWeekIndex < activeWeekIndex
-                  ? 'Pool results for this race appear here after Cody records the winner and second place.'
-                  : 'Upcoming race week. Cody can select participants and draw teams from Admin.'}
+                  ? 'Pool results for this race appear here after Colton records the winner and second place.'
+                  : 'Upcoming race week. Colton can select participants and draw teams from Admin.'}
             </p>
-            {liveRace && (
+            {selectedRaceLive && (
               <div className="lap-meter">
                 <span style={{ width: `${liveProgress}%` }} />
               </div>
@@ -1250,7 +1319,7 @@ function App() {
             <div className="empty-state compact-empty">
               <Trophy size={26} />
               <h3>No draw for this race yet</h3>
-              <p>Cody draws teams in Admin when this week is ready.</p>
+              <p>Colton draws teams in Admin when this week is ready.</p>
             </div>
           )}
 
@@ -1327,8 +1396,20 @@ function App() {
           <div className="section-head glass-head race-standing-head">
             <div>
               <p className="eyebrow">Race standings</p>
-              <h2>{liveRace ? `Lap ${liveRace.lapNumber} of ${liveRace.lapsInRace}` : 'Leaderboard'}</h2>
-              <span>{liveVehicles.length ? `${liveVehicles.length} cars on the board` : 'Waiting for NASCAR timing'}</span>
+              <h2>
+                {selectedRaceLive
+                  ? `Lap ${selectedRaceLive.lapNumber} of ${selectedRaceLive.lapsInRace}`
+                  : selectedLiveWeek.id === activeWeek.id
+                    ? 'Race not live yet'
+                    : selectedLiveStatus}
+              </h2>
+              <span>
+                {liveVehicles.length
+                  ? `${liveVehicles.length} cars on the board`
+                  : selectedLiveWeek.id === activeWeek.id
+                    ? 'NASCAR timing will unlock when cars are live on track'
+                    : 'Select the active race week for live timing'}
+              </span>
             </div>
             <button
               className={`refresh-live ${isRefreshingLive ? 'spinning' : ''}`}
@@ -1388,7 +1469,7 @@ function App() {
                 <div className="empty-state compact-empty">
                   <RadioTower size={26} />
                   <h3>No live standings yet</h3>
-                  <p>NASCAR timing appears here when the feed is publishing.</p>
+                  <p>NASCAR timing appears here when the current race is actually live.</p>
                 </div>
               )}
             </div>
@@ -1579,7 +1660,7 @@ function App() {
                   {(activeWeek.assignments[player.id] ?? []).length > 0 ? (
                     <div className="lineup-driver-list">
                       {(activeWeek.assignments[player.id] ?? []).map((driver) => {
-                        const liveCar = getLiveVehicle(liveRace, driver)
+                        const liveCar = getLiveVehicle(activeLiveRace, driver)
 
                         return (
                           <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
@@ -1655,11 +1736,12 @@ function App() {
             </div>
             <h2>{currentUser.name}</h2>
             <p>{currentUser.handle}</p>
-            {canInstall && (
-              <button className="install-button" type="button" onClick={installApp}>
-                <Download size={18} />
-                Install app
-              </button>
+            <button className="install-button" type="button" onClick={handleInstallTap}>
+              <Download size={18} />
+              Install app
+            </button>
+            {showInstallHelp && (
+              <p className="install-note">iPhone: Share, then Add to Home Screen. Android: tap Install/Add app.</p>
             )}
             <button type="button" onClick={logout}>
               <LogOut size={18} />
