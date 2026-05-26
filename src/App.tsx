@@ -100,7 +100,7 @@ type AudioChannel = {
   requiresAuth: boolean
 }
 
-const STORAGE_KEY = 'shuyler-ridge-raceday-v3-state'
+const STORAGE_KEY = 'shuyler-ridge-raceday-v4-state'
 const SESSION_KEY = 'shuyler-ridge-raceday-session'
 const INVITE_CODE = 'raceday'
 
@@ -187,40 +187,13 @@ const starterState: AppState = {
   activeWeekId: 'w5',
   players,
   weeks: [
-    createSeedWeek('w1', 'Daytona 500', 'Daytona International Speedway', 'Feb 15', 'cody', 'emily'),
-    createSeedWeek('w2', 'Pennzoil 400', 'Las Vegas Motor Speedway', 'Mar 2', 'sku', 'nate'),
-    createSeedWeek('w3', 'Food City 500', 'Bristol Motor Speedway', 'Apr 12', 'hillary', 'cory'),
-    {
-      id: 'w4',
-      race: 'Coca-Cola 600',
-      track: 'Charlotte Motor Speedway',
-      date: 'May 24',
-      participantIds: allPlayerIds,
-      paidBy: allPlayerIds,
-      assignments: dealDrivers(players, allPlayerIds, 'w4-ready'),
-    },
+    createOpenWeek('w1', 'Daytona 500', 'Daytona International Speedway', 'Feb 15'),
+    createOpenWeek('w2', 'Pennzoil 400', 'Las Vegas Motor Speedway', 'Mar 2'),
+    createOpenWeek('w3', 'Food City 500', 'Bristol Motor Speedway', 'Apr 12'),
+    createOpenWeek('w4', 'Coca-Cola 600', 'Charlotte Motor Speedway', 'May 24'),
     ...remainingCupSchedule.map((race) => createOpenWeek(race.id, race.race, race.track, race.date)),
   ],
-  messages: [
-    {
-      id: 'm1',
-      playerId: 'cody',
-      body: 'Draw closes when the green flag drops.',
-      sentAt: '8:03 PM',
-    },
-    {
-      id: 'm2',
-      playerId: 'hillary',
-      body: 'I want all Hendrick cars this week.',
-      sentAt: '8:05 PM',
-    },
-    {
-      id: 'm3',
-      playerId: 'lundy',
-      body: 'That sounds like something last place would say.',
-      sentAt: '8:07 PM',
-    },
-  ],
+  messages: [],
 }
 
 const trashTalk = [
@@ -239,27 +212,6 @@ const publicViews: Array<{ id: View; label: string; Icon: typeof Gauge }> = [
 ]
 
 const adminView = { id: 'admin' as const, label: 'Admin', Icon: Lock }
-
-function createSeedWeek(
-  id: string,
-  race: string,
-  track: string,
-  date: string,
-  winnerId: string,
-  secondId: string,
-): Week {
-  return {
-    id,
-    race,
-    track,
-    date,
-    participantIds: allPlayerIds,
-    paidBy: allPlayerIds,
-    assignments: dealDrivers(players, allPlayerIds, id),
-    winnerId,
-    secondId,
-  }
-}
 
 function createOpenWeek(id: string, race: string, track: string, date: string): Week {
   return {
@@ -354,7 +306,7 @@ function createNewWeek(race: string, roster: Player[]): Week {
     date: 'TBD',
     participantIds: roster.map((player) => player.id),
     paidBy: [],
-    assignments: dealDrivers(roster, roster.map((player) => player.id)),
+    assignments: Object.fromEntries(roster.map((player) => [player.id, [] as Driver[]])),
   }
 }
 
@@ -471,6 +423,10 @@ function scannerLabel(channel: AudioChannel) {
   return channel.driverNumber === 'All Scan' ? 'All Scan' : `#${channel.driverNumber} ${channel.driverName}`
 }
 
+function hasDraw(week: Week) {
+  return Object.values(week.assignments).some((assigned) => assigned.length > 0)
+}
+
 function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -484,6 +440,7 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const [chatText, setChatText] = useState('')
   const [newWeekName, setNewWeekName] = useState('')
+  const [selectedLiveWeekId, setSelectedLiveWeekId] = useState<string>()
   const [liveRace, setLiveRace] = useState<LiveRace>()
   const [liveStatus, setLiveStatus] = useState('Connecting to NASCAR timing...')
   const [audioChannels, setAudioChannels] = useState<AudioChannel[]>([])
@@ -493,6 +450,7 @@ function App() {
   const [audioError, setAudioError] = useState('')
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
+  const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
   const currentUser = state.players.find((player) => player.id === state.currentUserId)
   const isLoggedIn = Boolean(currentUser)
   const isAdmin = Boolean(currentUser?.isAdmin)
@@ -502,6 +460,12 @@ function App() {
     : publicViews
   const participants = state.players.filter((player) => activeWeek.participantIds.includes(player.id))
   const myDrivers = currentUser ? activeWeek.assignments[currentUser.id] ?? [] : []
+  const selectedLiveParticipants = state.players.filter((player) => selectedLiveWeek.participantIds.includes(player.id))
+  const selectedLiveDrawn = hasDraw(selectedLiveWeek)
+  const activeWeekIndex = state.weeks.findIndex((week) => week.id === activeWeek.id)
+  const selectedLiveWeekIndex = state.weeks.findIndex((week) => week.id === selectedLiveWeek.id)
+  const pastWeeks = state.weeks.slice(0, Math.max(0, activeWeekIndex)).reverse()
+  const futureWeeks = state.weeks.slice(Math.max(0, activeWeekIndex + 1))
   const myLiveCars = liveRace?.vehicles.filter((vehicle) =>
     myDrivers.some((driver) => driver.number === vehicle.vehicleNumber),
   )
@@ -512,6 +476,18 @@ function App() {
   const liveAudioChannels = (liveRace?.vehicles ?? [])
     .map((vehicle) => audioChannels.find((channel) => channel.driverNumber === vehicle.vehicleNumber))
     .filter((channel): channel is AudioChannel => Boolean(channel))
+  const projectedPoolStandings = selectedLiveParticipants
+    .map((player) => {
+      const assigned = selectedLiveWeek.assignments[player.id] ?? []
+      const liveCars = assigned
+        .map((driver) => getLiveVehicle(liveRace, driver))
+        .filter((vehicle): vehicle is LiveVehicle => Boolean(vehicle))
+      const bestPosition = liveCars.length > 0 ? Math.min(...liveCars.map((vehicle) => vehicle.position)) : undefined
+      const bestCar = liveCars.find((vehicle) => vehicle.position === bestPosition)
+
+      return { player, bestPosition, bestCar, assignedCount: assigned.length }
+    })
+    .sort((a, b) => (a.bestPosition ?? 999) - (b.bestPosition ?? 999) || a.player.name.localeCompare(b.player.name))
 
   useEffect(() => {
     let active = true
@@ -1075,24 +1051,103 @@ function App() {
 
       {activeView === 'live' && (
         <section className="screen">
+          <div className="race-switcher">
+            <label>
+              Race week
+              <select value={selectedLiveWeek.id} onChange={(event) => setSelectedLiveWeekId(event.target.value)}>
+                {state.weeks.map((week, index) => (
+                  <option key={week.id} value={week.id}>
+                    {index + 1}. {week.date} - {week.race}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="race-status-pill">
+              {selectedLiveWeekIndex < activeWeekIndex
+                ? 'Past Race'
+                : selectedLiveWeek.id === activeWeek.id
+                  ? 'Active Week'
+                  : 'Upcoming'}
+            </div>
+          </div>
+
           <div className="live-card">
             <div className="live-topline">
               <div>
-                <p className="eyebrow">Race tracker</p>
-                <h2>{liveRace ? `Lap ${liveRace.lapNumber} / ${liveRace.lapsInRace}` : 'Live timing'}</h2>
+                <p className="eyebrow">{selectedLiveWeek.date}</p>
+                <h2>{selectedLiveWeek.race}</h2>
+                <span>{selectedLiveWeek.track}</span>
               </div>
               <div className={`flag-chip flag-${liveRace?.flagState ?? 9}`}>
                 <CircleDot size={14} />
                 {liveRace ? flagLabel(liveRace.flagState) : 'Standby'}
               </div>
             </div>
-            <p>{liveStatus}</p>
+            <p>
+              {selectedLiveWeek.id === activeWeek.id
+                ? liveStatus
+                : selectedLiveWeekIndex < activeWeekIndex
+                  ? 'Pool results for this race appear here after Cody records the winner and second place.'
+                  : 'Upcoming race week. Cody can select participants and draw teams from Admin.'}
+            </p>
             {liveRace && (
               <div className="lap-meter">
                 <span style={{ width: `${Math.min(100, (liveRace.lapNumber / liveRace.lapsInRace) * 100)}%` }} />
               </div>
             )}
           </div>
+
+          <div className="result-glass-grid">
+            <article>
+              <span>Pool winner</span>
+              <strong>
+                {state.players.find((player) => player.id === selectedLiveWeek.winnerId)?.name ?? 'Not recorded'}
+              </strong>
+            </article>
+            <article>
+              <span>$5 back</span>
+              <strong>
+                {state.players.find((player) => player.id === selectedLiveWeek.secondId)?.name ?? 'Not recorded'}
+              </strong>
+            </article>
+            <article>
+              <span>Pot</span>
+              <strong>{formatCurrency(selectedLiveWeek.paidBy.length * 5)}</strong>
+            </article>
+          </div>
+
+          <div className="section-head glass-head">
+            <div>
+              <p className="eyebrow">Pool board</p>
+              <h2>Live projected standings</h2>
+            </div>
+            <Trophy size={23} />
+          </div>
+
+          {selectedLiveDrawn ? (
+            <div className="standings-list live-pool-list">
+              {projectedPoolStandings.map((entry, index) => (
+                <article className="standing-row" key={entry.player.id}>
+                  <div className="rank">{index + 1}</div>
+                  <div>
+                    <h3>{entry.player.name}</h3>
+                    <p>
+                      {entry.bestCar
+                        ? `Best car #${entry.bestCar.vehicleNumber} running P${entry.bestCar.position}`
+                        : `${entry.assignedCount} drivers assigned`}
+                    </p>
+                  </div>
+                  <strong>{entry.bestPosition ? `P${entry.bestPosition}` : '--'}</strong>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state compact-empty">
+              <Trophy size={26} />
+              <h3>No draw for this race yet</h3>
+              <p>Cody draws teams in Admin when this week is ready.</p>
+            </div>
+          )}
 
           <div className="scanner-card">
             <div className="live-topline">
@@ -1164,6 +1219,14 @@ function App() {
             </div>
           </div>
 
+          <div className="section-head glass-head race-standing-head">
+            <div>
+              <p className="eyebrow">Race standings</p>
+              <h2>{liveRace ? `Lap ${liveRace.lapNumber} of ${liveRace.lapsInRace}` : 'Leaderboard'}</h2>
+            </div>
+            <RadioTower size={23} />
+          </div>
+
           <div className="leaderboard">
             {(liveRace?.vehicles.slice(0, 12) ?? []).map((vehicle) => (
               <article className="leader-row" key={`${vehicle.position}-${vehicle.vehicleNumber}`}>
@@ -1194,6 +1257,43 @@ function App() {
               </article>
             ))}
           </div>
+
+          <div className="race-timeline-grid">
+            <section>
+              <div className="mini-title">
+                <CalendarDays size={18} />
+                Previous races
+              </div>
+              <div className="timeline-list">
+                {pastWeeks.slice(0, 6).map((week) => {
+                  const winner = state.players.find((player) => player.id === week.winnerId)
+
+                  return (
+                    <button type="button" key={week.id} onClick={() => setSelectedLiveWeekId(week.id)}>
+                      <span>{week.date}</span>
+                      <strong>{week.race}</strong>
+                      <small>{winner ? `${winner.name} won pool` : 'Result not recorded'}</small>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+            <section>
+              <div className="mini-title">
+                <CalendarDays size={18} />
+                Upcoming races
+              </div>
+              <div className="timeline-list">
+                {futureWeeks.slice(0, 6).map((week) => (
+                  <button type="button" key={week.id} onClick={() => setSelectedLiveWeekId(week.id)}>
+                    <span>{week.date}</span>
+                    <strong>{week.race}</strong>
+                    <small>{week.track}</small>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
         </section>
       )}
 
@@ -1220,6 +1320,13 @@ function App() {
                 </article>
               )
             })}
+            {state.messages.length === 0 && (
+              <div className="empty-state compact-empty">
+                <MessageCircle size={26} />
+                <h3>No messages yet</h3>
+                <p>First race-day chirp is still on the starting grid.</p>
+              </div>
+            )}
           </div>
 
           <div className="chip-row">
