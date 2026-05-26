@@ -668,7 +668,9 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <img className="sr-wordmark" src="/shuyler-ridge-logo.svg" alt="Shuyler Ridge Raceday" />
+        <div className="logo-plate">
+          <img className="sr-wordmark" src="/shuyler-ridge-logo.svg" alt="Shuyler Ridge Raceday" />
+        </div>
       </header>
 
       <section className="race-hero" aria-label="Current race">

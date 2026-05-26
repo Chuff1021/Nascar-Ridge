@@ -155,25 +155,38 @@
   position: relative;
   z-index: 1;
   display: block;
-  padding: max(10px, env(safe-area-inset-top)) 10px 8px;
+  padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+}
+
+.logo-plate {
+  min-height: 128px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 28% 12%, rgba(255, 255, 255, 0.22), transparent 28%),
+    radial-gradient(circle at 70% 46%, rgba(239, 35, 60, 0.2), transparent 33%),
+    linear-gradient(100deg, #252726 0%, #55524d 38%, #2b2f2f 70%, #111514 100%);
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 18px 38px rgba(0, 0, 0, 0.34);
 }
 
 .sr-wordmark {
+  width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: 82px;
   object-fit: contain;
   object-position: center;
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 8px 6px;
+  margin: 0;
+  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.62));
 }
 
 .race-hero {
   position: relative;
   z-index: 1;
   margin: 0 14px 12px;
-  min-height: 178px;
+  min-height: 168px;
   background:
     linear-gradient(115deg, rgba(5, 7, 13, 0.86), rgba(15, 23, 42, 0.54)),
     url('./assets/track-texture.svg');
@@ -932,7 +945,12 @@ button {
   }
 
   .sr-wordmark {
-    max-height: 76px;
+    width: 100%;
+    margin-inline: 0;
+  }
+
+  .logo-plate {
+    min-height: 118px;
   }
 
   .hero-metrics {
