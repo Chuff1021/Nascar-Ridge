@@ -219,6 +219,13 @@ const publicViews: Array<{ id: View; label: string; Icon: typeof Gauge }> = [
 
 const adminView = { id: 'admin' as const, label: 'Admin', Icon: Lock }
 
+function entriesToObject<T>(entries: Array<[string, T]>) {
+  return entries.reduce<Record<string, T>>((result, [key, value]) => {
+    result[key] = value
+    return result
+  }, {})
+}
+
 function createOpenWeek(id: string, race: string, track: string, date: string): Week {
   return {
     id,
@@ -227,7 +234,7 @@ function createOpenWeek(id: string, race: string, track: string, date: string): 
     date,
     participantIds: allPlayerIds,
     paidBy: [],
-    assignments: Object.fromEntries(players.map((player) => [player.id, [] as Driver[]])),
+    assignments: entriesToObject(players.map((player) => [player.id, [] as Driver[]])),
   }
 }
 
@@ -256,7 +263,7 @@ function normalizeSavedState(saved: AppState): AppState {
       ...week,
       participantIds: week.participantIds.filter((id) => canonicalIds.has(id)),
       paidBy: week.paidBy.filter((id) => canonicalIds.has(id)),
-      assignments: Object.fromEntries(mergedPlayers.map((player) => [player.id, week.assignments[player.id] ?? []])),
+      assignments: entriesToObject(mergedPlayers.map((player) => [player.id, week.assignments[player.id] ?? []])),
     })),
   }
 }
@@ -345,7 +352,7 @@ function shuffle<T>(items: T[], seed?: string) {
 
 function dealDrivers(roster: Player[], participantIds: string[], seed?: string) {
   const participants = roster.filter((player) => participantIds.includes(player.id))
-  const assignments = Object.fromEntries(roster.map((player) => [player.id, [] as Driver[]]))
+  const assignments = entriesToObject(roster.map((player) => [player.id, [] as Driver[]]))
 
   if (participants.length === 0) {
     return assignments
@@ -371,7 +378,7 @@ function createNewWeek(race: string, roster: Player[]): Week {
     date: 'TBD',
     participantIds: roster.map((player) => player.id),
     paidBy: [],
-    assignments: Object.fromEntries(roster.map((player) => [player.id, [] as Driver[]])),
+    assignments: entriesToObject(roster.map((player) => [player.id, [] as Driver[]])),
   }
 }
 
