@@ -123,6 +123,8 @@ const players: Player[] = [
   { id: 'lundy', name: 'Lundy', handle: 'Wall Rider', color: '#84cc16', passcode: 'raceday' },
 ]
 
+const neighborColors = ['#ef233c', '#1d4ed8', '#facc15', '#7c3aed', '#0f8b5f', '#ec4899', '#0891b2', '#f97316', '#84cc16']
+
 const drivers: Driver[] = [
   { number: '1', name: 'Ross Chastain', team: 'Trackhouse Racing' },
   { number: '2', name: 'Austin Cindric', team: 'Team Penske' },
@@ -243,16 +245,18 @@ function loadState(): AppState {
 }
 
 function normalizeSavedState(saved: AppState): AppState {
-  const canonicalIds = new Set(players.map((player) => player.id))
+  const savedCustomPlayers = (saved.players ?? []).filter((player) => !players.some((defaultPlayer) => defaultPlayer.id === player.id))
+  const mergedPlayers = [...players, ...savedCustomPlayers]
+  const canonicalIds = new Set(mergedPlayers.map((player) => player.id))
 
   return {
     ...saved,
-    players,
+    players: mergedPlayers,
     weeks: saved.weeks.map((week) => ({
       ...week,
       participantIds: week.participantIds.filter((id) => canonicalIds.has(id)),
       paidBy: week.paidBy.filter((id) => canonicalIds.has(id)),
-      assignments: Object.fromEntries(players.map((player) => [player.id, week.assignments[player.id] ?? []])),
+      assignments: Object.fromEntries(mergedPlayers.map((player) => [player.id, week.assignments[player.id] ?? []])),
     })),
   }
 }
@@ -270,6 +274,41 @@ function loadInitialView(): View {
 
 function saveState(state: AppState) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+}
+
+function createPlayerId(name: string, existingIds: string[]) {
+  const base =
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || `neighbor-${Date.now()}`
+
+  if (!existingIds.includes(base)) {
+    return base
+  }
+
+  let index = 2
+  while (existingIds.includes(`${base}-${index}`)) {
+    index += 1
+  }
+
+  return `${base}-${index}`
+}
+
+function createNeighbor(name: string, existingPlayers: Player[]): Player {
+  const id = createPlayerId(
+    name,
+    existingPlayers.map((player) => player.id),
+  )
+
+  return {
+    id,
+    name: name.trim(),
+    handle: 'New Neighbor',
+    color: neighborColors[existingPlayers.length % neighborColors.length],
+    passcode: INVITE_CODE,
+  }
 }
 
 function randomInt(max: number) {
@@ -477,6 +516,8 @@ function App() {
   const [loginError, setLoginError] = useState('')
   const [chatText, setChatText] = useState('')
   const [newWeekName, setNewWeekName] = useState('')
+  const [newNeighborName, setNewNeighborName] = useState('')
+  const [neighborError, setNeighborError] = useState('')
   const [selectedLiveWeekId, setSelectedLiveWeekId] = useState<string>()
   const [liveRace, setLiveRace] = useState<LiveRace>()
   const [liveStatus, setLiveStatus] = useState('Connecting to NASCAR timing...')
@@ -774,6 +815,38 @@ function App() {
       weeks: [...state.weeks, week],
     })
     setNewWeekName('')
+  }
+
+  function addNeighbor(event: FormEvent) {
+    event.preventDefault()
+    const clean = newNeighborName.trim()
+
+    if (!clean) {
+      setNeighborError('Enter a neighbor name.')
+      return
+    }
+
+    if (state.players.some((player) => player.name.toLowerCase() === clean.toLowerCase())) {
+      setNeighborError('That neighbor is already in the league.')
+      return
+    }
+
+    const neighbor = createNeighbor(clean, state.players)
+
+    updateState({
+      ...state,
+      players: [...state.players, neighbor],
+      weeks: state.weeks.map((week) => ({
+        ...week,
+        participantIds: week.id === activeWeek.id ? [...week.participantIds, neighbor.id] : week.participantIds,
+        assignments: {
+          ...week.assignments,
+          [neighbor.id]: [],
+        },
+      })),
+    })
+    setNewNeighborName('')
+    setNeighborError('')
   }
 
   function handleLogin(event: FormEvent) {
@@ -1590,6 +1663,30 @@ function App() {
                 ))}
               </select>
             </label>
+
+            <form className="admin-neighbor-form" onSubmit={addNeighbor}>
+              <div>
+                <p className="eyebrow">League roster</p>
+                <h3>Add neighbor</h3>
+                <span>New neighbors use the same league code and appear on the login screen.</span>
+              </div>
+              <div className="admin-neighbor-controls">
+                <input
+                  value={newNeighborName}
+                  onChange={(event) => {
+                    setNewNeighborName(event.target.value)
+                    setNeighborError('')
+                  }}
+                  placeholder="Neighbor name"
+                  aria-label="New neighbor name"
+                />
+                <button type="submit">
+                  <Plus size={18} />
+                  Add
+                </button>
+              </div>
+              {neighborError && <p className="login-error">{neighborError}</p>}
+            </form>
 
             <div className="admin-action">
               <div>

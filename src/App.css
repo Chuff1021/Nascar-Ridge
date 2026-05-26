@@ -248,6 +248,7 @@ h3 {
 .login-form input,
 .login-form select,
 .admin-panel select,
+.admin-neighbor-form input,
 .result-grid select,
 .race-switcher select,
 .chat-form input,
@@ -271,6 +272,7 @@ h3 {
 .login-form input:focus,
 .login-form select:focus,
 .admin-panel select:focus,
+.admin-neighbor-form input:focus,
 .result-grid select:focus,
 .race-switcher select:focus,
 .chat-form input:focus,
@@ -282,6 +284,7 @@ h3 {
 .login-form button,
 .account-card button,
 .admin-action button,
+.admin-neighbor-form button,
 .scanner-controls button,
 .chat-form button,
 .inline-form button {
@@ -305,6 +308,7 @@ h3 {
 .login-form button:active,
 .account-card button:active,
 .admin-action button:active,
+.admin-neighbor-form button:active,
 .scanner-controls button:active,
 .chat-form button:active,
 .inline-form button:active,
@@ -1240,6 +1244,36 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.admin-neighbor-form {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(45, 242, 143, 0.24);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 95% 0%, rgba(45, 242, 143, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.06);
+}
+
+.admin-neighbor-form span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 720;
+  line-height: 1.28;
+}
+
+.admin-neighbor-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-neighbor-form button {
+  min-width: 86px;
+  min-height: 50px;
 }
 
 .admin-action button {
