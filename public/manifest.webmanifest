@@ -5,9 +5,11 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
   "orientation": "portrait",
-  "background_color": "#111827",
-  "theme_color": "#d92525",
+  "background_color": "#050608",
+  "theme_color": "#050608",
+  "categories": ["sports", "entertainment"],
   "icons": [
     {
       "src": "/app-icon.png",
@@ -20,6 +22,22 @@
       "sizes": "1254x1254",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Race",
+      "short_name": "Live",
+      "description": "Open live NASCAR standings and scanner audio.",
+      "url": "/?view=live",
+      "icons": [{ "src": "/app-icon.png", "sizes": "1254x1254", "type": "image/png" }]
+    },
+    {
+      "name": "My Garage",
+      "short_name": "Garage",
+      "description": "Open your weekly driver lineup.",
+      "url": "/?view=garage",
+      "icons": [{ "src": "/app-icon.png", "sizes": "1254x1254", "type": "image/png" }]
     }
   ]
 }

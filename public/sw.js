@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shuyler-ridge-raceday-v8'
+const CACHE_NAME = 'shuyler-ridge-raceday-v9'
 const ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -23,6 +23,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return
+  }
+
+  if (new URL(event.request.url).pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)))
     return
   }
 

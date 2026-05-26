@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleDot,
   Crown,
+  Download,
   Gauge,
   Headphones,
   Lock,
@@ -98,6 +99,11 @@ type AudioChannel = {
   driverName: string
   url: string
   requiresAuth: boolean
+}
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
 }
 
 const STORAGE_KEY = 'shuyler-ridge-raceday-v4-state'
@@ -240,6 +246,13 @@ function loadState(): AppState {
 
 function loadSession() {
   return window.localStorage.getItem(SESSION_KEY) ?? undefined
+}
+
+function loadInitialView(): View {
+  const requested = new URLSearchParams(window.location.search).get('view')
+  const allowed: View[] = ['garage', 'league', 'live', 'chat', 'admin', 'account']
+
+  return allowed.includes(requested as View) ? (requested as View) : 'garage'
 }
 
 function saveState(state: AppState) {
@@ -430,11 +443,12 @@ function hasDraw(week: Week) {
 function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
+  const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const [state, setState] = useState<AppState>(() => {
     const loaded = loadState()
     return { ...loaded, currentUserId: loadSession() ?? loaded.currentUserId }
   })
-  const [view, setView] = useState<View>('garage')
+  const [view, setView] = useState<View>(() => loadInitialView())
   const [loginPlayerId, setLoginPlayerId] = useState(players[0].id)
   const [loginCode, setLoginCode] = useState('')
   const [loginError, setLoginError] = useState('')
@@ -448,6 +462,8 @@ function App() {
   const [activeAudio, setActiveAudio] = useState<AudioChannel>()
   const [isAudioPlaying, setIsAudioPlaying] = useState(false)
   const [audioError, setAudioError] = useState('')
+  const [canInstall, setCanInstall] = useState(false)
+  const [isRefreshingLive, setIsRefreshingLive] = useState(false)
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
@@ -476,6 +492,9 @@ function App() {
   const liveAudioChannels = (liveRace?.vehicles ?? [])
     .map((vehicle) => audioChannels.find((channel) => channel.driverNumber === vehicle.vehicleNumber))
     .filter((channel): channel is AudioChannel => Boolean(channel))
+  const liveVehicles = liveRace?.vehicles ?? []
+  const liveLeader = liveVehicles[0]
+  const liveProgress = liveRace?.lapsInRace ? Math.min(100, (liveRace.lapNumber / liveRace.lapsInRace) * 100) : 0
   const projectedPoolStandings = selectedLiveParticipants
     .map((player) => {
       const assigned = selectedLiveWeek.assignments[player.id] ?? []
@@ -518,6 +537,18 @@ function App() {
       active = false
       window.clearInterval(timer)
     }
+  }, [])
+
+  useEffect(() => {
+    function handleBeforeInstallPrompt(event: Event) {
+      event.preventDefault()
+      installPromptRef.current = event as BeforeInstallPromptEvent
+      setCanInstall(true)
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
   }, [])
 
   useEffect(() => {
@@ -788,6 +819,47 @@ function App() {
     setIsAudioPlaying(false)
   }
 
+  async function refreshLiveNow() {
+    setIsRefreshingLive(true)
+    try {
+      const [raceResponse, audioResponse] = await Promise.all([
+        fetch('/api/live-feed', { cache: 'no-store' }),
+        fetch('/api/audio-mapping', { cache: 'no-store' }),
+      ])
+
+      if (raceResponse.ok) {
+        setLiveRace(normalizeLiveRace(await raceResponse.json()))
+        setLiveStatus('Live NASCAR timing feed')
+      }
+
+      if (audioResponse.ok) {
+        const channels = normalizeAudioChannels(await audioResponse.json())
+        setAudioChannels(channels)
+        setScannerStatus(
+          channels.length > 0
+            ? `${channels.length} NASCAR scanner channels loaded`
+            : 'Scanner channels are waiting for the next live NASCAR session.',
+        )
+      }
+    } catch {
+      setLiveStatus('Live timing is waiting for the next available NASCAR feed.')
+    } finally {
+      window.setTimeout(() => setIsRefreshingLive(false), 450)
+    }
+  }
+
+  async function installApp() {
+    const prompt = installPromptRef.current
+    if (!prompt) {
+      return
+    }
+
+    await prompt.prompt()
+    await prompt.userChoice
+    installPromptRef.current = null
+    setCanInstall(false)
+  }
+
   const pot = activeWeek.paidBy.length * 5
   const winnerPayout = Math.max(0, pot - 5)
   const participantCount = activeWeek.participantIds.length
@@ -842,6 +914,13 @@ function App() {
         <div className="logo-plate">
           <img className="sr-wordmark" src="/shuyler-ridge-logo-header.png" alt="Shuyler Ridge Raceday" />
         </div>
+        <div className="app-status-bar">
+          <div>
+            <CircleDot size={10} />
+            {liveRace ? `${flagLabel(liveRace.flagState)} flag` : 'Race standby'}
+          </div>
+          <div>{liveRace ? `Updated ${liveRace.updatedAt}` : 'PWA ready'}</div>
+        </div>
       </header>
 
       <section className="race-hero" aria-label="Current race">
@@ -866,6 +945,7 @@ function App() {
             <strong>{liveRace ? flagLabel(liveRace.flagState) : 'Standby'}</strong>
           </div>
         </div>
+        <div className="track-lighting" aria-hidden="true" />
       </section>
 
       <audio ref={audioRef} className={`global-scanner-audio ${activeAudio ? 'visible' : ''}`} controls playsInline />
@@ -885,6 +965,19 @@ function App() {
               <Crown size={18} />
               #{standings.findIndex((player) => player.id === currentUser.id) + 1}
             </div>
+          </div>
+
+          <div className="premium-strip">
+            <article>
+              <span>Live leader</span>
+              <strong>{liveLeader ? `#${liveLeader.vehicleNumber}` : '--'}</strong>
+              <small>{liveLeader?.driverName ?? 'Waiting for feed'}</small>
+            </article>
+            <article>
+              <span>Your edge</span>
+              <strong>{myLiveCars?.length ? `P${Math.min(...myLiveCars.map((car) => car.position))}` : '--'}</strong>
+              <small>{myDrivers.length ? `${myDrivers.length} cars drawn` : 'No draw yet'}</small>
+            </article>
           </div>
 
           {!activeWeek.participantIds.includes(currentUser.id) ? (
@@ -1071,7 +1164,7 @@ function App() {
             </div>
           </div>
 
-          <div className="live-card">
+          <div className="live-card race-broadcast-card">
             <div className="live-topline">
               <div>
                 <p className="eyebrow">{selectedLiveWeek.date}</p>
@@ -1083,6 +1176,18 @@ function App() {
                 {liveRace ? flagLabel(liveRace.flagState) : 'Standby'}
               </div>
             </div>
+            {liveLeader && selectedLiveWeek.id === activeWeek.id && (
+              <div className="leader-feature">
+                <span>Overall leader</span>
+                <strong>
+                  #{liveLeader.vehicleNumber} {liveLeader.driverName}
+                </strong>
+                <small>
+                  Lap {liveLeader.lapsCompleted}
+                  {liveLeader.lastLapSpeed ? ` / ${liveLeader.lastLapSpeed.toFixed(1)} mph` : ''}
+                </small>
+              </div>
+            )}
             <p>
               {selectedLiveWeek.id === activeWeek.id
                 ? liveStatus
@@ -1092,7 +1197,7 @@ function App() {
             </p>
             {liveRace && (
               <div className="lap-meter">
-                <span style={{ width: `${Math.min(100, (liveRace.lapNumber / liveRace.lapsInRace) * 100)}%` }} />
+                <span style={{ width: `${liveProgress}%` }} />
               </div>
             )}
           </div>
@@ -1205,7 +1310,7 @@ function App() {
               Track channels
             </div>
             <div className="scanner-grid">
-              {liveAudioChannels.slice(0, 18).map((channel) => (
+              {liveAudioChannels.map((channel) => (
                 <button
                   className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
                   type="button"
@@ -1223,39 +1328,70 @@ function App() {
             <div>
               <p className="eyebrow">Race standings</p>
               <h2>{liveRace ? `Lap ${liveRace.lapNumber} of ${liveRace.lapsInRace}` : 'Leaderboard'}</h2>
+              <span>{liveVehicles.length ? `${liveVehicles.length} cars on the board` : 'Waiting for NASCAR timing'}</span>
             </div>
-            <RadioTower size={23} />
+            <button
+              className={`refresh-live ${isRefreshingLive ? 'spinning' : ''}`}
+              type="button"
+              onClick={refreshLiveNow}
+              aria-label="Refresh live race standings"
+            >
+              <RefreshCw size={18} />
+            </button>
           </div>
 
-          <div className="leaderboard">
-            {(liveRace?.vehicles.slice(0, 12) ?? []).map((vehicle) => (
-              <article className="leader-row" key={`${vehicle.position}-${vehicle.vehicleNumber}`}>
-                <div className="rank">{vehicle.position}</div>
-                <div className="car-number small">#{vehicle.vehicleNumber}</div>
-                <div>
-                  <h3>{vehicle.driverName}</h3>
-                  <p>
-                    {vehicle.startingPosition ? `Started ${vehicle.startingPosition}, ` : ''}Lap {vehicle.lapsCompleted}
-                    {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
-                  </p>
+          <div className="leaderboard-shell">
+            <div className="leaderboard-header">
+              <span>Pos</span>
+              <span>Car</span>
+              <span>Driver</span>
+              <span>Move</span>
+              <span>Radio</span>
+            </div>
+            <div className="leaderboard scroll-standings" aria-label="Scrollable live race standings">
+              {liveVehicles.map((vehicle) => {
+                const channel = audioChannels.find((item) => item.driverNumber === vehicle.vehicleNumber)
+                const movement =
+                  vehicle.startingPosition && vehicle.startingPosition !== vehicle.position
+                    ? vehicle.startingPosition - vehicle.position
+                    : 0
+
+                return (
+                  <article className="leader-row" key={`${vehicle.position}-${vehicle.vehicleNumber}`}>
+                    <div className="rank">{vehicle.position}</div>
+                    <div className="car-number small">#{vehicle.vehicleNumber}</div>
+                    <div>
+                      <h3>{vehicle.driverName}</h3>
+                      <p>
+                        {vehicle.startingPosition ? `Started ${vehicle.startingPosition}, ` : ''}Lap{' '}
+                        {vehicle.lapsCompleted}
+                        {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
+                      </p>
+                    </div>
+                    <div className={`move-chip ${movement > 0 ? 'up' : movement < 0 ? 'down' : ''}`}>
+                      {movement > 0 ? `+${movement}` : movement < 0 ? movement : '0'}
+                    </div>
+                    {channel && (
+                      <button
+                        className="listen-mini"
+                        type="button"
+                        onClick={() => playScanner(channel)}
+                        aria-label={`Listen to ${vehicle.driverName}`}
+                      >
+                        <Headphones size={16} />
+                      </button>
+                    )}
+                  </article>
+                )
+              })}
+              {liveVehicles.length === 0 && (
+                <div className="empty-state compact-empty">
+                  <RadioTower size={26} />
+                  <h3>No live standings yet</h3>
+                  <p>NASCAR timing appears here when the feed is publishing.</p>
                 </div>
-                {audioChannels.some((channel) => channel.driverNumber === vehicle.vehicleNumber) && (
-                  <button
-                    className="listen-mini"
-                    type="button"
-                    onClick={() => {
-                      const channel = audioChannels.find((item) => item.driverNumber === vehicle.vehicleNumber)
-                      if (channel) {
-                        playScanner(channel)
-                      }
-                    }}
-                    aria-label={`Listen to ${vehicle.driverName}`}
-                  >
-                    <Headphones size={16} />
-                  </button>
-                )}
-              </article>
-            ))}
+              )}
+            </div>
           </div>
 
           <div className="race-timeline-grid">
@@ -1519,6 +1655,12 @@ function App() {
             </div>
             <h2>{currentUser.name}</h2>
             <p>{currentUser.handle}</p>
+            {canInstall && (
+              <button className="install-button" type="button" onClick={installApp}>
+                <Download size={18} />
+                Install app
+              </button>
+            )}
             <button type="button" onClick={logout}>
               <LogOut size={18} />
               Log out
