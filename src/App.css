@@ -56,16 +56,16 @@
 }
 
 .logo-stage {
-  min-height: 154px;
+  min-height: 116px;
   display: grid;
   place-items: center;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent),
-    url('./assets/track-texture.svg');
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    #010101;
   background-size: cover;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px;
+  padding: 8px;
 }
 
 .logo-stage img,
@@ -154,38 +154,25 @@
 .topbar {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr 98px;
-  align-items: center;
-  gap: 10px;
-  padding: max(14px, env(safe-area-inset-top)) 14px 8px;
+  display: block;
+  padding: max(10px, env(safe-area-inset-top)) 10px 6px;
 }
 
 .sr-wordmark {
-  min-width: 0;
-  height: 70px;
+  height: 112px;
   object-fit: contain;
-  object-position: left center;
-}
-
-.nascar-badge {
-  background: rgba(255, 255, 255, 0.94);
+  object-position: center;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  padding: 8px;
-  display: grid;
-  place-items: center;
-}
-
-.nascar-badge img {
-  width: 80px;
-  display: block;
+  padding: 2px 6px;
 }
 
 .race-hero {
   position: relative;
   z-index: 1;
   margin: 0 14px 12px;
-  min-height: 202px;
+  min-height: 178px;
   background:
     linear-gradient(115deg, rgba(5, 7, 13, 0.86), rgba(15, 23, 42, 0.54)),
     url('./assets/track-texture.svg');
@@ -213,7 +200,7 @@
 .hero-content {
   position: relative;
   z-index: 1;
-  padding: 20px 16px 16px;
+  padding: 17px 16px 16px;
 }
 
 .eyebrow {
@@ -236,7 +223,7 @@ p {
 h1 {
   max-width: 320px;
   color: #ffffff;
-  font-size: 2.25rem;
+  font-size: 2.02rem;
   font-weight: 950;
   line-height: 0.92;
   text-transform: uppercase;
@@ -940,15 +927,11 @@ button {
 
 @media (max-width: 380px) {
   h1 {
-    font-size: 1.9rem;
+    font-size: 1.78rem;
   }
 
-  .topbar {
-    grid-template-columns: 1fr 84px;
-  }
-
-  .nascar-badge img {
-    width: 66px;
+  .sr-wordmark {
+    height: 94px;
   }
 
   .hero-metrics {

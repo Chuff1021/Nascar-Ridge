@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shuyler-ridge-raceday-v3'
+const CACHE_NAME = 'shuyler-ridge-raceday-v4'
 const ASSETS = [
   '/',
   '/manifest.webmanifest',

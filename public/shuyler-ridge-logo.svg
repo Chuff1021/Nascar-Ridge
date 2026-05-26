@@ -1,78 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="820" viewBox="0 0 1200 820" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="700" viewBox="0 0 1800 700" role="img" aria-labelledby="title">
   <title id="title">Shuyler Ridge Raceday Fantasy Sports App</title>
   <defs>
     <linearGradient id="chrome" x1="0" x2="0" y1="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset=".45" stop-color="#f8fafc"/>
-      <stop offset=".56" stop-color="#b8bec8"/>
+      <stop offset=".42" stop-color="#f5f7fb"/>
+      <stop offset=".56" stop-color="#b8bec7"/>
       <stop offset="1" stop-color="#ffffff"/>
     </linearGradient>
-    <linearGradient id="red-bevel" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#ff3038"/>
-      <stop offset=".5" stop-color="#ef233c"/>
-      <stop offset="1" stop-color="#9f101c"/>
+    <linearGradient id="red" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ff2e35"/>
+      <stop offset=".45" stop-color="#ef233c"/>
+      <stop offset="1" stop-color="#9b0c18"/>
     </linearGradient>
-    <linearGradient id="blue-bevel" x1="0" x2="1">
-      <stop offset="0" stop-color="#0067c8"/>
-      <stop offset="1" stop-color="#1387ff"/>
+    <linearGradient id="blue" x1="0" x2="1">
+      <stop offset="0" stop-color="#0064c6"/>
+      <stop offset="1" stop-color="#1185ff"/>
     </linearGradient>
-    <linearGradient id="yellow-bevel" x1="0" x2="1">
-      <stop offset="0" stop-color="#ffcf24"/>
-      <stop offset="1" stop-color="#ffe35c"/>
+    <linearGradient id="yellow" x1="0" x2="1">
+      <stop offset="0" stop-color="#ffcf23"/>
+      <stop offset="1" stop-color="#ffe568"/>
     </linearGradient>
     <linearGradient id="silver" x1="0" x2="1">
-      <stop offset="0" stop-color="#777"/>
+      <stop offset="0" stop-color="#585b63"/>
       <stop offset=".45" stop-color="#f3f4f6"/>
-      <stop offset="1" stop-color="#777"/>
+      <stop offset="1" stop-color="#656973"/>
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000" flood-opacity=".65"/>
+    <filter id="shadow" x="-8%" y="-20%" width="116%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#000" flood-opacity=".7"/>
     </filter>
   </defs>
 
-  <rect width="1200" height="820" fill="#000"/>
+  <rect width="1800" height="700" fill="#000"/>
+
   <g filter="url(#shadow)">
-    <path d="M168 203 L1105 112 Q1174 111 1156 180 L1132 316 L1175 318 L1162 364 L1111 364 L1066 626 Q1056 684 999 690 L222 747 Q177 752 185 710 L197 646 L30 661 L48 607 L98 606 L124 486 L59 489 L83 431 L138 420 L165 282 Q173 229 222 218 Z" fill="#050505" stroke="#c9cbd1" stroke-width="12" stroke-linejoin="round"/>
-    <path d="M190 226 L1089 139 Q1138 136 1127 185 L1088 340 L1131 341 L1122 359 L1069 361 L1020 609 Q1011 649 973 654 L241 710 Q212 713 218 686 L231 620 L88 632 L94 615 L251 606 L269 543 L126 548 L133 529 L287 520 L332 276 Q340 244 371 240 Z" fill="#070707" stroke="#3a3d44" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M120 300 H1680 Q1724 300 1717 344 L1686 490 Q1679 526 1644 528 H356 Q326 528 334 498 L343 465 H86 Q57 465 65 436 L94 332 Q102 300 120 300 Z" fill="#050505" stroke="#bfc3ca" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M124 320 H1646 Q1674 320 1669 344 L1645 458 Q1640 482 1615 482 H407 Q382 482 388 458 L397 421 H105 L124 320 Z" fill="#080808" stroke="#3b3f46" stroke-width="3" stroke-linejoin="round"/>
 
-    <g transform="skewX(-11)">
-      <rect x="201" y="258" width="40" height="129" rx="10" fill="url(#yellow-bevel)"/>
-      <rect x="252" y="252" width="42" height="132" rx="10" fill="url(#yellow-bevel)"/>
-      <rect x="312" y="245" width="54" height="135" rx="10" fill="url(#red-bevel)"/>
-      <rect x="379" y="238" width="62" height="139" rx="10" fill="url(#red-bevel)"/>
-      <rect x="459" y="229" width="72" height="144" rx="10" fill="url(#blue-bevel)"/>
-      <rect x="548" y="218" width="76" height="148" rx="10" fill="url(#blue-bevel)"/>
+    <g transform="translate(125 330) skewX(-12)">
+      <rect x="0" y="0" width="34" height="122" rx="8" fill="url(#yellow)"/>
+      <rect x="47" y="0" width="34" height="122" rx="8" fill="url(#yellow)"/>
+      <rect x="100" y="0" width="52" height="122" rx="8" fill="url(#red)"/>
+      <rect x="169" y="0" width="52" height="122" rx="8" fill="url(#red)"/>
+      <rect x="243" y="0" width="68" height="122" rx="8" fill="url(#blue)"/>
+      <rect x="329" y="0" width="68" height="122" rx="8" fill="url(#blue)"/>
     </g>
 
-    <path d="M604 341 L721 266 L781 308 L866 230 L936 272 L1017 219 L1100 261 L1039 276 L1062 251 L939 312 L861 278 L782 335 L721 318 L644 355 Z" fill="url(#silver)"/>
-    <path d="M602 354 C730 308 890 305 1048 327 C1088 321 1119 298 1136 266 C1154 303 1120 340 1051 366 C883 348 730 354 603 392 Z" fill="#fff"/>
-    <path d="M648 230 C748 178 907 153 1074 146 C888 174 746 204 640 255 Z" fill="#ef233c"/>
+    <path d="M1004 248 C1168 178 1390 149 1581 166 C1357 182 1169 213 1007 275 Z" fill="#ef233c"/>
+    <path d="M1106 337 L1216 274 L1279 311 L1375 248 L1445 285 L1537 234 L1631 282 L1582 291 L1540 270 L1444 326 L1373 292 L1282 348 L1217 329 L1132 368 Z" fill="url(#silver)"/>
+    <path d="M1084 384 C1263 340 1451 339 1628 363 C1673 356 1701 334 1715 300 C1741 346 1697 388 1627 412 C1435 390 1262 393 1084 430 Z" fill="#fff"/>
 
-    <g font-family="Arial Black, Impact, sans-serif" font-weight="900" font-style="italic" letter-spacing="-8">
-      <text x="113" y="508" fill="#000" stroke="#000" stroke-width="36" font-size="154" transform="skewX(-11)">SHUYLER</text>
-      <text x="113" y="508" fill="url(#chrome)" stroke="#ffffff" stroke-width="5" font-size="154" transform="skewX(-11)">SHUYLER</text>
-      <text x="147" y="646" fill="#000" stroke="#000" stroke-width="34" font-size="148" transform="skewX(-11)">RIDGE</text>
-      <text x="147" y="646" fill="url(#red-bevel)" stroke="#ef233c" stroke-width="4" font-size="148" transform="skewX(-11)">RIDGE</text>
-      <text x="286" y="738" fill="#000" stroke="#000" stroke-width="20" font-size="82" letter-spacing="14" transform="skewX(-8)">RACEDAY</text>
-      <text x="286" y="738" fill="url(#chrome)" stroke="#ffffff" stroke-width="2" font-size="82" letter-spacing="14" transform="skewX(-8)">RACEDAY</text>
+    <g font-family="Arial Black, Impact, sans-serif" font-weight="900" font-style="italic">
+      <text x="362" y="428" fill="#000" stroke="#000" stroke-width="28" font-size="128" letter-spacing="-7" transform="skewX(-10)">SHUYLER</text>
+      <text x="362" y="428" fill="url(#chrome)" stroke="#ffffff" stroke-width="3" font-size="128" letter-spacing="-7" transform="skewX(-10)">SHUYLER</text>
+      <text x="1138" y="426" fill="#000" stroke="#000" stroke-width="28" font-size="128" letter-spacing="-6" transform="skewX(-10)">RIDGE</text>
+      <text x="1138" y="426" fill="url(#red)" stroke="#ef233c" stroke-width="2" font-size="128" letter-spacing="-6" transform="skewX(-10)">RIDGE</text>
     </g>
 
-    <path d="M151 703 L252 691" stroke="#888" stroke-width="6"/>
-    <path d="M137 727 L248 715" stroke="#666" stroke-width="5"/>
-    <path d="M125 748 L248 738" stroke="#aaa" stroke-width="4"/>
-    <path d="M247 742 L847 703 L852 725 L1059 707" fill="none" stroke="#ef233c" stroke-width="7" stroke-linecap="round"/>
-    <path d="M232 748 L872 709" fill="none" stroke="#0073ce" stroke-width="6" stroke-linecap="round"/>
-    <text x="276" y="789" fill="#f8fafc" font-family="Arial Black, Impact, sans-serif" font-size="53" font-style="italic" font-weight="900" letter-spacing="6">FANTASY SPORTS APP</text>
+    <g transform="translate(395 457)">
+      <path d="M0 32 L84 23" stroke="#7d828b" stroke-width="6"/>
+      <path d="M0 48 L84 40" stroke="#a5aab3" stroke-width="5"/>
+      <path d="M0 64 L84 56" stroke="#53575f" stroke-width="4"/>
+      <text x="112" y="72" fill="url(#chrome)" font-family="Arial Black, Impact, sans-serif" font-size="67" font-style="italic" font-weight="900" letter-spacing="24">RACEDAY</text>
+    </g>
 
-    <g transform="translate(888 731) skewX(-9)">
+    <g transform="translate(929 468) skewX(-8)">
       <rect x="0" y="0" width="38" height="38" fill="#fff"/>
       <rect x="76" y="0" width="38" height="38" fill="#fff"/>
+      <rect x="152" y="0" width="38" height="38" fill="#fff"/>
       <rect x="38" y="38" width="38" height="38" fill="#fff"/>
       <rect x="114" y="38" width="38" height="38" fill="#fff"/>
+      <rect x="190" y="38" width="38" height="38" fill="#fff"/>
       <rect x="38" y="0" width="38" height="38" fill="#111"/>
       <rect x="114" y="0" width="38" height="38" fill="#111"/>
+      <rect x="190" y="0" width="38" height="38" fill="#111"/>
       <rect x="0" y="38" width="38" height="38" fill="#111"/>
       <rect x="76" y="38" width="38" height="38" fill="#111"/>
+      <rect x="152" y="38" width="38" height="38" fill="#111"/>
     </g>
+
+    <path d="M1120 448 H1658 Q1680 448 1676 469 L1664 526 Q1659 548 1637 548 H1100 Q1078 548 1083 526 L1094 469 Q1099 448 1120 448 Z" fill="#050505" stroke="#ef233c" stroke-width="7"/>
+    <path d="M1106 541 H1648" stroke="#0075d4" stroke-width="5" stroke-linecap="round"/>
+    <text x="1150" y="522" fill="#f8fafc" font-family="Arial Black, Impact, sans-serif" font-size="48" font-style="italic" font-weight="900" letter-spacing="5">FANTASY SPORTS APP</text>
   </g>
 </svg>
