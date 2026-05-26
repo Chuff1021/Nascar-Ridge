@@ -203,8 +203,6 @@ const starterState: AppState = {
 }
 
 const trashTalk = [
-  'Garage is loaded.',
-  'Somebody check the draw machine.',
   'That is a championship lineup.',
   'Bring the $5 and the excuses.',
 ]
