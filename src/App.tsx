@@ -290,25 +290,84 @@ function createOpenWeek(id: string, race: string, track: string, date: string, s
   }
 }
 
+function weekPickCount(week: Week) {
+  return Object.values(week.assignments ?? {}).reduce((total, picks) => total + (picks?.length ?? 0), 0)
+}
+
+// Gather every saved snapshot on this device: the current key, the backup, and
+// any older versioned keys left behind by past releases. This is how draws
+// survive a storage-key change in a future deploy — we never read just one key.
+function collectSavedStates(): AppState[] {
+  const ordered: string[] = [STORAGE_KEY, BACKUP_KEY]
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key && key.startsWith('shuyler-ridge-raceday') && key.includes('state') && !ordered.includes(key)) {
+      ordered.push(key)
+    }
+  }
+
+  const states: AppState[] = []
+  for (const key of ordered) {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) {
+      continue
+    }
+    try {
+      const parsed = JSON.parse(raw) as AppState
+      if (parsed && Array.isArray(parsed.weeks)) {
+        states.push(parsed)
+      }
+    } catch {
+      // Skip anything that isn't valid saved state.
+    }
+  }
+  return states
+}
+
+// Merge snapshots so no race's lineup is ever lost: the first (highest-priority)
+// snapshot wins for metadata/order, but for any week we keep whichever snapshot
+// has the most picks. This only ever ADDS draws back, it never removes them.
+function mergeSavedStates(states: AppState[]): AppState {
+  const base = states[0]
+  const byId = new Map<string, Week>()
+  base.weeks.forEach((week) => byId.set(week.id, week))
+
+  states.slice(1).forEach((state) => {
+    state.weeks.forEach((week) => {
+      const existing = byId.get(week.id)
+      if (!existing) {
+        byId.set(week.id, week)
+        return
+      }
+      if (weekPickCount(week) > weekPickCount(existing)) {
+        byId.set(week.id, {
+          ...existing,
+          assignments: week.assignments,
+          paidBy: existing.paidBy?.length ? existing.paidBy : week.paidBy,
+          winnerId: existing.winnerId ?? week.winnerId,
+          secondId: existing.secondId ?? week.secondId,
+        })
+      }
+    })
+  })
+
+  return { ...base, weeks: Array.from(byId.values()) }
+}
+
 function loadState(): AppState {
-  const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(BACKUP_KEY)
-  if (!saved) {
+  const states = collectSavedStates()
+  if (states.length === 0) {
     return starterState
   }
 
-  let parsed: AppState
-  try {
-    parsed = JSON.parse(saved) as AppState
-  } catch {
-    return starterState
-  }
+  const merged = states.length === 1 ? states[0] : mergeSavedStates(states)
 
   try {
-    return normalizeSavedState(parsed)
+    return normalizeSavedState(merged)
   } catch {
     // Migration failed — never discard the user's draws. Fall back to the raw
-    // saved state so saveState can't overwrite real picks with starter data.
-    return parsed
+    // merged state so saveState can't overwrite real picks with starter data.
+    return merged
   }
 }
 
@@ -721,6 +780,14 @@ function App() {
   const [showInstallHelp, setShowInstallHelp] = useState(false)
   const [rostersBySeries, setRostersBySeries] = useState<Record<number, Driver[]>>({ 1: drivers })
   const [driverIdByName, setDriverIdByName] = useState<Record<string, number>>({})
+
+  // On first load, write the (possibly recovered/merged) state straight back so
+  // pre-existing draws are mirrored into the backup key and any draws recovered
+  // from an older storage key are consolidated into the current one.
+  useEffect(() => {
+    saveState(state)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
