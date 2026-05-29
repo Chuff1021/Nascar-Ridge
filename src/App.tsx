@@ -255,11 +255,6 @@ const starterState: AppState = {
   messages: [],
 }
 
-const trashTalk = [
-  'That is a championship lineup.',
-  'Bring the $5 and the excuses.',
-]
-
 const publicViews: Array<{ id: View; label: string; Icon: typeof Gauge }> = [
   { id: 'garage', label: 'Garage', Icon: Gauge },
   { id: 'league', label: 'League', Icon: Trophy },
@@ -351,7 +346,12 @@ function mergeSavedStates(states: AppState[]): AppState {
     })
   })
 
-  return { ...base, weeks: Array.from(byId.values()) }
+  const messages = states.reduce<ChatMessage[]>(
+    (all, snapshot) => mergeMessages(all, snapshot.messages ?? []),
+    [],
+  )
+
+  return { ...base, weeks: Array.from(byId.values()), messages }
 }
 
 function loadState(): AppState {
@@ -442,9 +442,10 @@ function loadInitialView(): View {
 function saveState(state: AppState) {
   const serialized = JSON.stringify(state)
   window.localStorage.setItem(STORAGE_KEY, serialized)
-  // Keep a second copy under a key that no migration touches, so draws survive
-  // even if the primary key is ever wiped or a future migration misbehaves.
-  if (hasAnyDraw(state)) {
+  // Keep a second copy under a key that no migration touches, so draws and chat
+  // history survive even if the primary key is ever wiped or a future migration
+  // misbehaves.
+  if (hasAnyDraw(state) || state.messages.length > 0) {
     window.localStorage.setItem(BACKUP_KEY, serialized)
   }
 }
@@ -566,8 +567,37 @@ function createChatMessage(playerId: string, body: string): ChatMessage {
     id: window.crypto?.randomUUID?.() ?? `message-${Math.random().toString(36).slice(2)}`,
     playerId,
     body,
-    sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    sentAt: new Date().toISOString(),
   }
+}
+
+// Union two message lists by id and order them oldest-first. Used both to merge
+// the shared (server) feed with the local cache and to recover history across
+// storage-key changes, so a message is never dropped once it has been seen.
+function mergeMessages(a: ChatMessage[] = [], b: ChatMessage[] = []): ChatMessage[] {
+  const byId = new Map<string, ChatMessage>()
+  for (const message of [...a, ...b]) {
+    if (message && message.id) {
+      byId.set(message.id, message)
+    }
+  }
+  return Array.from(byId.values()).sort((x, y) =>
+    x.sentAt < y.sentAt ? -1 : x.sentAt > y.sentAt ? 1 : 0,
+  )
+}
+
+// Display helper: ISO timestamps render as a friendly time (plus date if it
+// wasn't today). Legacy time-only strings ("3:45 PM") are shown as-is.
+function formatChatTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  if (date.toDateString() === new Date().toDateString()) {
+    return time
+  }
+  return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`
 }
 
 function flagLabel(flagState: number) {
@@ -931,6 +961,47 @@ function App() {
     }
   }, [])
 
+  // Keep the shared league chat in sync while the Chat tab is open: pull the
+  // feed on open and every few seconds after, merging it into the local cache.
+  useEffect(() => {
+    if (activeView !== 'chat') {
+      return undefined
+    }
+    let active = true
+
+    async function pullChat() {
+      try {
+        const response = await fetch('/api/chat', { cache: 'no-store' })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        if (!active || !Array.isArray(data.messages) || data.messages.length === 0) {
+          return
+        }
+        setState((prev) => {
+          const merged = mergeMessages(prev.messages, data.messages)
+          if (merged.length === prev.messages.length) {
+            return prev
+          }
+          const next = { ...prev, messages: merged }
+          saveState(next)
+          return next
+        })
+      } catch {
+        // Offline or store not linked — stay on the local cache.
+      }
+    }
+
+    pullChat()
+    const timer = window.setInterval(pullChat, 4000)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [activeView])
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) {
@@ -1131,17 +1202,39 @@ function App() {
     })
   }
 
-  function addMessage(body: string) {
+  async function addMessage(body: string) {
     const clean = body.trim()
     if (!clean || !currentUser) {
       return
     }
 
-    updateState({
-      ...state,
-      messages: [...state.messages, createChatMessage(currentUser.id, clean)],
-    })
+    // Show it immediately and persist locally, so the message is never lost even
+    // if the network drops before it reaches the shared store.
+    const message = createChatMessage(currentUser.id, clean)
+    updateState({ ...state, messages: mergeMessages(state.messages, [message]) })
     setChatText('')
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(message),
+      })
+      if (!response.ok) {
+        return
+      }
+      const data = await response.json()
+      if (Array.isArray(data.messages)) {
+        setState((prev) => {
+          const next = { ...prev, messages: mergeMessages(prev.messages, data.messages) }
+          saveState(next)
+          return next
+        })
+      }
+    } catch {
+      // Offline or store not linked yet — the message stays in the local cache
+      // and will reach the shared feed on the next successful send or sync.
+    }
   }
 
   function handleChatSubmit(event: FormEvent) {
@@ -2061,7 +2154,7 @@ function App() {
                 <article className={`message ${isMine ? 'mine' : ''}`} key={message.id}>
                   <span>{player.name}</span>
                   <p>{message.body}</p>
-                  <small>{message.sentAt}</small>
+                  <small>{formatChatTime(message.sentAt)}</small>
                 </article>
               )
             })}
@@ -2072,14 +2165,6 @@ function App() {
                 <p>First race-day chirp is still on the starting grid.</p>
               </div>
             )}
-          </div>
-
-          <div className="chip-row">
-            {trashTalk.map((line) => (
-              <button type="button" key={line} onClick={() => addMessage(line)}>
-                {line}
-              </button>
-            ))}
           </div>
 
           <form className="chat-form" onSubmit={handleChatSubmit}>
