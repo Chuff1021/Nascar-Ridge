@@ -1095,6 +1095,79 @@ h3 {
   background: linear-gradient(135deg, var(--red), var(--red-dark));
 }
 
+.leader-row .car-badge {
+  justify-self: center;
+  height: 30px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.leader-row .car-badge.text {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  min-width: 32px;
+  padding: 0 6px;
+  color: #fff;
+  background: linear-gradient(180deg, #1b2230, #05070a);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 1000;
+}
+
+.leader-driver {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.leader-row .driver-face {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
+    linear-gradient(180deg, #1b2230, #05070a);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 3px solid var(--yellow);
+  display: grid;
+  place-items: center;
+}
+
+.leader-row .driver-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.leader-row .driver-face.fallback {
+  color: #fff;
+  font-family: 'Arial Black', system-ui, sans-serif;
+  font-style: italic;
+  font-size: 1.25rem;
+  font-weight: 1000;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.leader-driver-id {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.leader-driver-id h3 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .race-timeline-grid {
   display: grid;
   gap: 12px;

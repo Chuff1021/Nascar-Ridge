@@ -1954,14 +1954,22 @@ function App() {
                 return (
                   <article className="leader-row" key={`${vehicle.position}-${vehicle.vehicleNumber}`}>
                     <div className="rank">{vehicle.position}</div>
-                    <div className="car-number small">#{vehicle.vehicleNumber}</div>
-                    <div>
-                      <h3>{vehicle.driverName}</h3>
-                      <p>
-                        {vehicle.startingPosition ? `Started ${vehicle.startingPosition}, ` : ''}Lap{' '}
-                        {vehicle.lapsCompleted}
-                        {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
-                      </p>
+                    <CarBadge number={vehicle.vehicleNumber} seriesId={selectedLiveWeek.seriesId} />
+                    <div className="leader-driver">
+                      <DriverFace
+                        driverId={driverIdByName[driverKey(vehicle.driverName)]}
+                        seriesId={selectedLiveWeek.seriesId}
+                        color="#1f2a44"
+                        initial={vehicle.driverName.slice(0, 1)}
+                      />
+                      <div className="leader-driver-id">
+                        <h3>{vehicle.driverName}</h3>
+                        <p>
+                          {vehicle.startingPosition ? `Started ${vehicle.startingPosition}, ` : ''}Lap{' '}
+                          {vehicle.lapsCompleted}
+                          {vehicle.lastLapSpeed ? `, ${vehicle.lastLapSpeed.toFixed(1)} mph` : ''}
+                        </p>
+                      </div>
                     </div>
                     <div className={`move-chip ${movement > 0 ? 'up' : movement < 0 ? 'down' : ''}`}>
                       {movement > 0 ? `+${movement}` : movement < 0 ? movement : '0'}
