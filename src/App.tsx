@@ -50,6 +50,7 @@ type Week = {
   race: string
   track: string
   date: string
+  seriesId: SeriesId
   participantIds: string[]
   paidBy: string[]
   assignments: Record<string, Driver[]>
@@ -191,15 +192,41 @@ const remainingCupSchedule = [
   { id: 'w27', race: 'Homestead-Miami Championship', track: 'Homestead-Miami Speedway', date: 'Nov 8' },
 ]
 
+type SeriesId = 1 | 2 | 3
+
+const seriesMeta: Record<SeriesId, { short: string; name: string; day: string }> = {
+  3: { short: 'Trucks', name: 'Craftsman Truck Series', day: 'Friday' },
+  2: { short: 'Xfinity', name: 'Xfinity Series', day: 'Saturday' },
+  1: { short: 'Cup', name: 'Cup Series', day: 'Sunday' },
+}
+
+const seriesOrder: SeriesId[] = [3, 2, 1]
+
+// This weekend's three races at Nashville (Trucks Fri / Xfinity Sat / Cup Sun).
+// The Cup race reuses the existing 'w5' week so its history/results carry over.
+const raceWeekend: Array<{ seriesId: SeriesId; id: string; race: string; track: string; date: string }> = [
+  { seriesId: 3, id: 'truck-nashville-2026', race: 'Allegiance 200', track: 'Nashville Superspeedway', date: 'May 29' },
+  { seriesId: 2, id: 'xfinity-nashville-2026', race: 'Sports Illustrated Resorts 250', track: 'Nashville Superspeedway', date: 'May 30' },
+  { seriesId: 1, id: 'w5', race: 'Cracker Barrel 400', track: 'Nashville Superspeedway', date: 'May 31' },
+]
+
+const weekendBySeries = entriesToObject(raceWeekend.map((race) => [String(race.seriesId), race]))
+
 const starterState: AppState = {
-  activeWeekId: 'w5',
+  activeWeekId: 'truck-nashville-2026',
   players,
   weeks: [
     createOpenWeek('w1', 'Daytona 500', 'Daytona International Speedway', 'Feb 15'),
     createOpenWeek('w2', 'Pennzoil 400', 'Las Vegas Motor Speedway', 'Mar 2'),
     createOpenWeek('w3', 'Food City 500', 'Bristol Motor Speedway', 'Apr 12'),
     createOpenWeek('w4', 'Coca-Cola 600', 'Charlotte Motor Speedway', 'May 24'),
-    ...remainingCupSchedule.map((race) => createOpenWeek(race.id, race.race, race.track, race.date)),
+    createOpenWeek('truck-nashville-2026', 'Allegiance 200', 'Nashville Superspeedway', 'May 29', 3),
+    createOpenWeek('xfinity-nashville-2026', 'Sports Illustrated Resorts 250', 'Nashville Superspeedway', 'May 30', 2),
+    ...remainingCupSchedule.map((race) =>
+      race.id === 'w5'
+        ? createOpenWeek('w5', 'Cracker Barrel 400', 'Nashville Superspeedway', 'May 31', 1)
+        : createOpenWeek(race.id, race.race, race.track, race.date),
+    ),
   ],
   messages: [],
 }
@@ -226,12 +253,13 @@ function entriesToObject<T>(entries: Array<[string, T]>) {
   }, {})
 }
 
-function createOpenWeek(id: string, race: string, track: string, date: string): Week {
+function createOpenWeek(id: string, race: string, track: string, date: string, seriesId: SeriesId = 1): Week {
   return {
     id,
     race,
     track,
     date,
+    seriesId,
     participantIds: allPlayerIds,
     paidBy: [],
     assignments: entriesToObject(players.map((player) => [player.id, [] as Driver[]])),
@@ -256,15 +284,55 @@ function normalizeSavedState(saved: AppState): AppState {
   const mergedPlayers = [...players, ...savedCustomPlayers]
   const canonicalIds = new Set(mergedPlayers.map((player) => player.id))
 
+  const weeks: Week[] = saved.weeks.map((week) => ({
+    ...week,
+    seriesId: (week.seriesId ?? 1) as SeriesId,
+    participantIds: week.participantIds.filter((id) => canonicalIds.has(id)),
+    paidBy: week.paidBy.filter((id) => canonicalIds.has(id)),
+    assignments: entriesToObject(mergedPlayers.map((player) => [player.id, week.assignments[player.id] ?? []])),
+  }))
+
+  let activeWeekId = saved.activeWeekId
+  let addedWeekendRace = false
+
+  raceWeekend.forEach((meta) => {
+    const existing = weeks.find((week) => week.id === meta.id)
+    if (existing) {
+      existing.seriesId = meta.seriesId
+      existing.race = meta.race
+      existing.track = meta.track
+      existing.date = meta.date
+      return
+    }
+
+    const week: Week = {
+      id: meta.id,
+      race: meta.race,
+      track: meta.track,
+      date: meta.date,
+      seriesId: meta.seriesId,
+      participantIds: mergedPlayers.map((player) => player.id),
+      paidBy: [],
+      assignments: entriesToObject(mergedPlayers.map((player) => [player.id, [] as Driver[]])),
+    }
+    const insertAt = weeks.findIndex((candidate) => candidate.id === 'w5')
+    if (insertAt >= 0) {
+      weeks.splice(insertAt, 0, week)
+    } else {
+      weeks.push(week)
+    }
+    addedWeekendRace = true
+  })
+
+  if (addedWeekendRace) {
+    activeWeekId = 'truck-nashville-2026'
+  }
+
   return {
     ...saved,
     players: mergedPlayers,
-    weeks: saved.weeks.map((week) => ({
-      ...week,
-      participantIds: week.participantIds.filter((id) => canonicalIds.has(id)),
-      paidBy: week.paidBy.filter((id) => canonicalIds.has(id)),
-      assignments: entriesToObject(mergedPlayers.map((player) => [player.id, week.assignments[player.id] ?? []])),
-    })),
+    weeks,
+    activeWeekId,
   }
 }
 
@@ -350,16 +418,16 @@ function shuffle<T>(items: T[], seed?: string) {
   return result
 }
 
-function dealDrivers(roster: Player[], participantIds: string[], seed?: string) {
+function dealDrivers(roster: Player[], participantIds: string[], driverPool: Driver[], seed?: string) {
   const participants = roster.filter((player) => participantIds.includes(player.id))
   const assignments = entriesToObject(roster.map((player) => [player.id, [] as Driver[]]))
 
-  if (participants.length === 0) {
+  if (participants.length === 0 || driverPool.length === 0) {
     return assignments
   }
 
   const playerOrder = shuffle(participants, seed ? `${seed}-players` : undefined)
-  const driverOrder = shuffle(drivers, seed ? `${seed}-drivers` : undefined)
+  const driverOrder = shuffle(driverPool, seed ? `${seed}-drivers` : undefined)
 
   driverOrder.forEach((driver, index) => {
     const player = playerOrder[index % playerOrder.length]
@@ -376,6 +444,7 @@ function createNewWeek(race: string, roster: Player[]): Week {
     race: clean,
     track: 'Next race',
     date: 'TBD',
+    seriesId: 1,
     participantIds: roster.map((player) => player.id),
     paidBy: [],
     assignments: entriesToObject(roster.map((player) => [player.id, [] as Driver[]])),
@@ -483,6 +552,29 @@ function normalizeAudioChannels(data: unknown): AudioChannel[] {
     .filter((channel) => channel.driverNumber && channel.url)
 }
 
+function rosterFromMapping(data: unknown): Driver[] {
+  const mapping = data as {
+    audio_config?: Array<{ driver_number?: string; driver_name?: string }>
+  }
+
+  const seen = new Set<string>()
+  const roster: Driver[] = []
+
+  for (const channel of mapping.audio_config ?? []) {
+    const number = (channel.driver_number ?? '').trim()
+    const name = (channel.driver_name ?? '').replace(/\s*\(i\)\s*$/i, '').trim()
+
+    if (!number || number === 'All Scan' || !name || seen.has(number)) {
+      continue
+    }
+
+    seen.add(number)
+    roster.push({ number, name, team: '' })
+  }
+
+  return roster
+}
+
 function getLiveVehicle(liveRace: LiveRace | undefined, driver: Driver) {
   return liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
 }
@@ -536,6 +628,7 @@ function App() {
   const [canInstall, setCanInstall] = useState(false)
   const [isRefreshingLive, setIsRefreshingLive] = useState(false)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
+  const [rostersBySeries, setRostersBySeries] = useState<Record<number, Driver[]>>({ 1: drivers })
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
@@ -713,6 +806,48 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    let active = true
+
+    async function loadRosters() {
+      const results = await Promise.all(
+        seriesOrder.map(async (seriesId) => {
+          try {
+            const response = await fetch(`/api/audio-mapping?series=${seriesId}`, { cache: 'no-store' })
+            if (!response.ok) {
+              return [seriesId, undefined] as const
+            }
+
+            const roster = rosterFromMapping(await response.json())
+            return [seriesId, roster.length > 0 ? roster : undefined] as const
+          } catch {
+            return [seriesId, undefined] as const
+          }
+        }),
+      )
+
+      if (!active) {
+        return
+      }
+
+      setRostersBySeries((current) => {
+        const next = { ...current }
+        for (const [seriesId, roster] of results) {
+          if (roster) {
+            next[seriesId] = roster
+          }
+        }
+        return next
+      })
+    }
+
+    loadRosters()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   const standings = useMemo(() => {
     return state.players
       .map((player) => {
@@ -753,10 +888,20 @@ function App() {
   function drawWeek() {
     updateWeek(activeWeek.id, (week) => ({
       ...week,
-      assignments: dealDrivers(state.players, week.participantIds),
+      assignments: dealDrivers(state.players, week.participantIds, rostersBySeries[week.seriesId] ?? drivers),
       winnerId: undefined,
       secondId: undefined,
     }))
+  }
+
+  function selectWeekendSeries(seriesId: SeriesId) {
+    const race = weekendBySeries[String(seriesId)]
+    if (!race) {
+      return
+    }
+
+    updateState({ ...state, activeWeekId: race.id })
+    setSelectedLiveWeekId(race.id)
   }
 
   function togglePaid(playerId: string) {
@@ -1101,6 +1246,27 @@ function App() {
             </div>
           </div>
 
+          <div className="series-switch" role="group" aria-label="Race weekend series">
+            {seriesOrder.map((seriesId) => {
+              const race = weekendBySeries[String(seriesId)]
+              const meta = seriesMeta[seriesId]
+              const isActive = activeWeek.id === race?.id
+
+              return (
+                <button
+                  key={seriesId}
+                  type="button"
+                  className={isActive ? 'active' : ''}
+                  onClick={() => selectWeekendSeries(seriesId)}
+                >
+                  <span>{meta.day}</span>
+                  <strong>{meta.short}</strong>
+                  <small>{race?.race}</small>
+                </button>
+              )
+            })}
+          </div>
+
           <div className="premium-strip">
             <article>
               <span>Live leader</span>
@@ -1157,7 +1323,8 @@ function App() {
                     <div>
                       <h3>{driver.name}</h3>
                       <p>
-                        {driver.team} / {startingPositionLabel(liveCar)}
+                        {driver.team ? `${driver.team} / ` : ''}
+                        {startingPositionLabel(liveCar)}
                       </p>
                     </div>
                     <div className="driver-actions">
@@ -1665,7 +1832,7 @@ function App() {
               >
                 {state.weeks.map((week) => (
                   <option key={week.id} value={week.id}>
-                    {week.race}
+                    {seriesMeta[week.seriesId].short} - {week.race}
                   </option>
                 ))}
               </select>
@@ -1699,6 +1866,9 @@ function App() {
               <div>
                 <p className="eyebrow">Random draw</p>
                 <h3>{drawComplete ? 'Teams are posted' : 'Ready to draw teams'}</h3>
+                <span>
+                  {(rostersBySeries[activeWeek.seriesId] ?? drivers).length} {seriesMeta[activeWeek.seriesId].short} drivers
+                </span>
               </div>
               <button type="button" onClick={drawWeek}>
                 <RefreshCw size={18} />
