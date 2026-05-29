@@ -113,6 +113,22 @@ const STORAGE_KEY = 'shuyler-ridge-raceday-v4-state'
 const BACKUP_KEY = 'shuyler-ridge-raceday-backup'
 const SESSION_KEY = 'shuyler-ridge-raceday-session'
 const INVITE_CODE = 'raceday'
+const NASCAR_SEASON = new Date().getFullYear()
+
+function driverKey(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function headshotUrl(driverId: number, seriesId: SeriesId) {
+  return `https://cf.nascar.com/data/images/drivers/${NASCAR_SEASON}/${seriesId}/${driverId}.png`
+}
+
+function carBadgeUrl(number: string, seriesId: SeriesId) {
+  return `https://cf.nascar.com/data/images/carbadges/${seriesId}/${number}.png`
+}
 
 const players: Player[] = [
   { id: 'cody', name: 'Cody', handle: 'Pole Sitter', color: '#ef233c', passcode: 'raceday' },
@@ -623,6 +639,52 @@ function isLiveTimingActive(race: LiveRace | undefined) {
   return race.flagState !== 9 && !isCompleted
 }
 
+function DriverFace({
+  driverId,
+  seriesId,
+  color,
+  initial,
+}: {
+  driverId: number | undefined
+  seriesId: SeriesId
+  color: string
+  initial: string
+}) {
+  const [failed, setFailed] = useState(false)
+
+  if (!driverId || failed) {
+    return (
+      <div className="driver-face fallback" style={{ background: color }}>
+        {initial}
+      </div>
+    )
+  }
+
+  return (
+    <div className="driver-face">
+      <img src={headshotUrl(driverId, seriesId)} alt="" loading="lazy" onError={() => setFailed(true)} />
+    </div>
+  )
+}
+
+function CarBadge({ number, seriesId }: { number: string; seriesId: SeriesId }) {
+  const [failed, setFailed] = useState(false)
+
+  if (failed) {
+    return <span className="car-badge text">{number}</span>
+  }
+
+  return (
+    <img
+      className="car-badge"
+      src={carBadgeUrl(number, seriesId)}
+      alt={`Car number ${number}`}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -653,6 +715,7 @@ function App() {
   const [isRefreshingLive, setIsRefreshingLive] = useState(false)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
   const [rostersBySeries, setRostersBySeries] = useState<Record<number, Driver[]>>({ 1: drivers })
+  const [driverIdByName, setDriverIdByName] = useState<Record<string, number>>({})
 
   const activeWeek = state.weeks.find((week) => week.id === state.activeWeekId) ?? state.weeks[0]
   const selectedLiveWeek = state.weeks.find((week) => week.id === (selectedLiveWeekId ?? state.activeWeekId)) ?? activeWeek
@@ -870,6 +933,40 @@ function App() {
     }
 
     loadRosters()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+
+    async function loadDriverIds() {
+      try {
+        const response = await fetch('/api/drivers', { cache: 'no-store' })
+        if (!response.ok) {
+          return
+        }
+
+        const data = (await response.json()) as { drivers?: Array<{ id: number; name: string }> }
+        const map: Record<string, number> = {}
+        for (const driver of data.drivers ?? []) {
+          const key = driverKey(driver.name)
+          if (key && !map[key]) {
+            map[key] = driver.id
+          }
+        }
+
+        if (active) {
+          setDriverIdByName(map)
+        }
+      } catch {
+        // Headshots simply fall back to the number plate if this fails.
+      }
+    }
+
+    loadDriverIds()
 
     return () => {
       active = false
@@ -1485,15 +1582,22 @@ function App() {
                     <div className="lineup-driver-list" style={{ ['--team' as string]: player.color }}>
                       {(activeWeek.assignments[player.id] ?? []).map((driver) => {
                         const liveCar = getLiveVehicle(activeLiveRace, driver)
+                        const driverId = driverIdByName[driverKey(driver.name)]
 
                         return (
                           <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
-                            <span className="driver-num">{driver.number}</span>
+                            <DriverFace
+                              driverId={driverId}
+                              seriesId={activeWeek.seriesId}
+                              color={player.color}
+                              initial={driver.name.slice(0, 1)}
+                            />
                             <div className="driver-id">
                               <strong>{driver.name}</strong>
                               <em>{startingPositionLabel(liveCar)}</em>
                             </div>
                             {liveCar && <span className="driver-pos">P{liveCar.position}</span>}
+                            <CarBadge number={driver.number} seriesId={activeWeek.seriesId} />
                           </div>
                         )
                       })}

@@ -1376,13 +1376,13 @@ h3 {
 
 .lineup-driver {
   position: relative;
-  min-height: 56px;
+  min-height: 58px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
-  padding: 8px 10px 8px 8px;
-  border-radius: 11px;
+  padding: 7px 9px 7px 7px;
+  border-radius: 12px;
   overflow: hidden;
   background:
     linear-gradient(135deg, rgba(20, 26, 34, 0.95), rgba(5, 7, 10, 0.95));
@@ -1398,42 +1398,38 @@ h3 {
   width: 4px;
   background: var(--team);
   box-shadow: 0 0 12px var(--team);
+  z-index: 2;
 }
 
-/* checkered-flag corner accent */
-.lineup-driver::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 26px;
-  height: 26px;
-  opacity: 0.5;
-  background-image:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%);
-  background-size: 7px 7px;
-  background-position: 0 0, 0 3.5px;
-  clip-path: polygon(100% 0, 0 0, 100% 100%);
-}
-
-.lineup-driver .driver-num {
+.lineup-driver .driver-face {
   position: relative;
   z-index: 1;
-  min-height: 40px;
-  color: #fff;
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
+  overflow: hidden;
   background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
     linear-gradient(180deg, #1b2230, #05070a);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-top: 3px solid var(--team);
-  border-radius: 8px;
   display: grid;
   place-items: center;
+}
+
+.lineup-driver .driver-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.lineup-driver .driver-face.fallback {
+  color: #fff;
   font-family: 'Arial Black', system-ui, sans-serif;
   font-style: italic;
-  font-size: 1.18rem;
+  font-size: 1.3rem;
   font-weight: 1000;
-  letter-spacing: -0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
@@ -1464,16 +1460,46 @@ h3 {
   letter-spacing: 0.04em;
 }
 
+/* live position chip, overlaid on the headshot corner */
 .lineup-driver .driver-pos {
-  position: relative;
-  z-index: 1;
-  padding: 3px 8px;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  z-index: 3;
+  padding: 1px 5px;
   color: #071018;
   background: linear-gradient(135deg, #fff, var(--yellow) 70%, #ff9f1c);
-  border-radius: 6px;
-  font-size: 0.72rem;
+  border-radius: 5px;
+  font-size: 0.62rem;
   font-weight: 1000;
   letter-spacing: 0.02em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* official NASCAR car-number badge */
+.lineup-driver .car-badge {
+  position: relative;
+  z-index: 1;
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.lineup-driver .car-badge.text {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  min-width: 34px;
+  padding: 0 7px;
+  color: #fff;
+  background: linear-gradient(180deg, #1b2230, #05070a);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 7px;
+  font-family: 'Arial Black', system-ui, sans-serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  font-weight: 1000;
 }
 
 .lineup-empty {
