@@ -18,7 +18,9 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Save,
   Trophy,
+  Upload,
   UserRound,
   UsersRound,
   Volume2,
@@ -108,6 +110,7 @@ type BeforeInstallPromptEvent = Event & {
 }
 
 const STORAGE_KEY = 'shuyler-ridge-raceday-v4-state'
+const BACKUP_KEY = 'shuyler-ridge-raceday-backup'
 const SESSION_KEY = 'shuyler-ridge-raceday-session'
 const INVITE_CODE = 'raceday'
 
@@ -267,15 +270,24 @@ function createOpenWeek(id: string, race: string, track: string, date: string, s
 }
 
 function loadState(): AppState {
-  const saved = window.localStorage.getItem(STORAGE_KEY)
+  const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(BACKUP_KEY)
   if (!saved) {
     return starterState
   }
 
+  let parsed: AppState
   try {
-    return normalizeSavedState(JSON.parse(saved) as AppState)
+    parsed = JSON.parse(saved) as AppState
   } catch {
     return starterState
+  }
+
+  try {
+    return normalizeSavedState(parsed)
+  } catch {
+    // Migration failed — never discard the user's draws. Fall back to the raw
+    // saved state so saveState can't overwrite real picks with starter data.
+    return parsed
   }
 }
 
@@ -348,7 +360,17 @@ function loadInitialView(): View {
 }
 
 function saveState(state: AppState) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  const serialized = JSON.stringify(state)
+  window.localStorage.setItem(STORAGE_KEY, serialized)
+  // Keep a second copy under a key that no migration touches, so draws survive
+  // even if the primary key is ever wiped or a future migration misbehaves.
+  if (hasAnyDraw(state)) {
+    window.localStorage.setItem(BACKUP_KEY, serialized)
+  }
+}
+
+function hasAnyDraw(state: AppState) {
+  return state.weeks.some((week) => Object.values(week.assignments).some((assigned) => assigned.length > 0))
 }
 
 function createPlayerId(name: string, existingIds: string[]) {
@@ -605,6 +627,8 @@ function App() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const hlsRef = useRef<Hls | null>(null)
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
+  const backupInputRef = useRef<HTMLInputElement | null>(null)
+  const [backupNote, setBackupNote] = useState('')
   const [state, setState] = useState<AppState>(() => {
     const loaded = loadState()
     return { ...loaded, currentUserId: loadSession() ?? loaded.currentUserId }
@@ -665,6 +689,10 @@ function App() {
   const liveAudioChannels = (activeLiveRace?.vehicles ?? [])
     .map((vehicle) => audioChannels.find((channel) => channel.driverNumber === vehicle.vehicleNumber))
     .filter((channel): channel is AudioChannel => Boolean(channel))
+  const allDriverChannels = audioChannels
+    .filter((channel) => channel.driverNumber && channel.driverNumber !== 'All Scan')
+    .slice()
+    .sort((a, b) => Number(a.driverNumber) - Number(b.driverNumber))
   const liveVehicles = selectedRaceLive?.vehicles ?? []
   const liveLeader = selectedRaceLive?.vehicles[0]
   const liveProgress = selectedRaceLive?.lapsInRace
@@ -1021,6 +1049,43 @@ function App() {
     window.localStorage.removeItem(SESSION_KEY)
     setState({ ...state, currentUserId: undefined })
     setView('garage')
+  }
+
+  function exportBackup() {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `shuyler-ridge-backup-${stamp}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setBackupNote('Backup saved. Keep this file to restore your draws on any device.')
+  }
+
+  function importBackup(event: FormEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) {
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as AppState
+        const restored = normalizeSavedState(parsed)
+        // Preserve who is currently signed in on this device.
+        updateState({ ...restored, currentUserId: state.currentUserId })
+        setBackupNote('Backup restored. Your draws are back.')
+      } catch {
+        setBackupNote('That file could not be read as a Shuyler Ridge backup.')
+      }
+    }
+    reader.readAsText(file)
+    input.value = ''
   }
 
   async function playScanner(channel: AudioChannel) {
@@ -1417,15 +1482,18 @@ function App() {
                   </div>
 
                   {(activeWeek.assignments[player.id] ?? []).length > 0 ? (
-                    <div className="lineup-driver-list">
+                    <div className="lineup-driver-list" style={{ ['--team' as string]: player.color }}>
                       {(activeWeek.assignments[player.id] ?? []).map((driver) => {
                         const liveCar = getLiveVehicle(activeLiveRace, driver)
 
                         return (
                           <div className="lineup-driver" key={`${player.id}-${driver.number}`}>
-                            <span>#{driver.number}</span>
-                            <strong>{driver.name}</strong>
-                            <small>{startingPositionLabel(liveCar)}</small>
+                            <span className="driver-num">{driver.number}</span>
+                            <div className="driver-id">
+                              <strong>{driver.name}</strong>
+                              <em>{startingPositionLabel(liveCar)}</em>
+                            </div>
+                            {liveCar && <span className="driver-pos">P{liveCar.position}</span>}
                           </div>
                         )
                       })}
@@ -1619,22 +1687,47 @@ function App() {
               </>
             )}
 
+            {liveAudioChannels.length > 0 && (
+              <>
+                <div className="mini-title scanner-title">
+                  <RadioTower size={18} />
+                  On track now
+                </div>
+                <div className="scanner-grid">
+                  {liveAudioChannels.map((channel) => (
+                    <button
+                      className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                      type="button"
+                      key={`live-${channel.driverNumber}`}
+                      onClick={() => playScanner(channel)}
+                    >
+                      <span>#{channel.driverNumber}</span>
+                      <strong>{channel.driverName}</strong>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             <div className="mini-title scanner-title">
-              <RadioTower size={18} />
-              Track channels
+              <Headphones size={18} />
+              Listen to any driver
             </div>
             <div className="scanner-grid">
-              {liveAudioChannels.map((channel) => (
+              {allDriverChannels.map((channel) => (
                 <button
                   className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
                   type="button"
-                  key={`live-${channel.driverNumber}`}
+                  key={`all-${channel.driverNumber}`}
                   onClick={() => playScanner(channel)}
                 >
                   <span>#{channel.driverNumber}</span>
                   <strong>{channel.driverName}</strong>
                 </button>
               ))}
+              {allDriverChannels.length === 0 && (
+                <p className="scanner-empty">Driver channels load when NASCAR posts the scanner lineup for the next session.</p>
+              )}
             </div>
           </div>
 
@@ -2020,6 +2113,36 @@ function App() {
               Log out
             </button>
           </div>
+
+          <div className="backup-card">
+            <div className="mini-title">
+              <Save size={18} />
+              Save your draws
+            </div>
+            <p className="backup-copy">
+              Your weekly draws live on this phone. Download a backup file before any update, then restore it here to
+              bring every pick back — even on a new phone.
+            </p>
+            <div className="backup-actions">
+              <button type="button" onClick={exportBackup}>
+                <Download size={17} />
+                Download backup
+              </button>
+              <button type="button" onClick={() => backupInputRef.current?.click()}>
+                <Upload size={17} />
+                Restore backup
+              </button>
+            </div>
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={importBackup}
+              hidden
+            />
+            {backupNote && <p className="backup-note">{backupNote}</p>}
+          </div>
+
           <div className="fairness-band">
             <ShieldCheck size={20} />
             <p>Invite code for this prototype is {INVITE_CODE}. Real private accounts need a shared backend next.</p>
