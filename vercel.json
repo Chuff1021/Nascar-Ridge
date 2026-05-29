@@ -1,0 +1,8 @@
+{
+  "images": {
+    "sizes": [48, 64, 96, 128, 256],
+    "formats": ["image/webp"],
+    "minimumCacheTTL": 604800,
+    "remotePatterns": [{ "protocol": "https", "hostname": "cf.nascar.com" }]
+  }
+}

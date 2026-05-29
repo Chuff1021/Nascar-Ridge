@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shuyler-ridge-raceday-v13'
+const CACHE_NAME = 'shuyler-ridge-raceday-v14'
 const ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -10,14 +10,15 @@ const ASSETS = [
 ]
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)))
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))),
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
   )
 })
 
@@ -26,10 +27,28 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  if (new URL(event.request.url).pathname.startsWith('/api/')) {
+  const url = new URL(event.request.url)
+
+  if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request).catch(() => caches.match(event.request)))
     return
   }
 
+  // Network-first for page navigations so deploys show up on reload; fall back
+  // to the cached shell only when offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put('/', copy))
+          return response
+        })
+        .catch(() => caches.match('/').then((cached) => cached ?? caches.match(event.request))),
+    )
+    return
+  }
+
+  // Hashed build assets are immutable, so cache-first is safe and fast.
   event.respondWith(caches.match(event.request).then((cached) => cached ?? fetch(event.request)))
 })

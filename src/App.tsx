@@ -123,7 +123,12 @@ function driverKey(name: string) {
 }
 
 function headshotUrl(driverId: number, seriesId: SeriesId) {
-  return `https://cf.nascar.com/data/images/drivers/${NASCAR_SEASON}/${seriesId}/${driverId}.png`
+  const source = `https://cf.nascar.com/data/images/drivers/${NASCAR_SEASON}/${seriesId}/${driverId}.png`
+  // Tiles render the face at ~46px; serve a 96px edge-cached/resized copy
+  // through Vercel's image optimizer instead of the full 320KB PNG. In local
+  // dev (no optimizer) fall back to the raw CDN url.
+  if (import.meta.env.DEV) return source
+  return `/_vercel/image?url=${encodeURIComponent(source)}&w=96&q=75`
 }
 
 function carBadgeUrl(number: string, seriesId: SeriesId) {
