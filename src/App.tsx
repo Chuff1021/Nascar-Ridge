@@ -1553,6 +1553,12 @@ function App() {
 
                 return (
                   <article className="driver-card" key={`${driver.number}-${driver.name}`}>
+                    <DriverFace
+                      driverId={driverIdByName[driverKey(driver.name)]}
+                      seriesId={activeWeek.seriesId}
+                      color={currentUser.color}
+                      initial={driver.name.slice(0, 1)}
+                    />
                     <div className="car-number">#{driver.number}</div>
                     <div>
                       <h3>{driver.name}</h3>

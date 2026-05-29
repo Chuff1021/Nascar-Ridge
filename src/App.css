@@ -628,9 +628,39 @@ h3 {
   min-height: 82px;
   padding: 11px;
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) auto;
+  grid-template-columns: 54px 64px minmax(0, 1fr) auto;
   align-items: center;
   gap: 11px;
+}
+
+.driver-card .driver-face {
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.14), transparent 60%),
+    linear-gradient(180deg, #1b2230, #05070a);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 3px solid var(--yellow);
+  display: grid;
+  place-items: center;
+}
+
+.driver-card .driver-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.driver-card .driver-face.fallback {
+  color: #fff;
+  font-family: 'Arial Black', system-ui, sans-serif;
+  font-style: italic;
+  font-size: 1.4rem;
+  font-weight: 1000;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .driver-card strong {
@@ -1739,7 +1769,7 @@ h3 {
   }
 
   .driver-card {
-    grid-template-columns: 62px minmax(0, 1fr) auto;
+    grid-template-columns: 48px 58px minmax(0, 1fr) auto;
   }
 
   .leaderboard-header {
