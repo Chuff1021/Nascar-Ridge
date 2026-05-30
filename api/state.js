@@ -1,45 +1,76 @@
-// Shared league state backed by Vercel KV (Upstash Redis REST).
-// One JSON blob holds the league everyone shares: players, weekly draws,
+// Shared league state — the league everyone shares: players, weekly draws,
 // who paid, and results — so a draw on the commissioner's phone shows up on
-// every neighbor's phone. Chat lives in its own key (see api/chat.js); this
+// every neighbor's phone. Chat lives in its own store (see api/chat.js); this
 // endpoint deliberately ignores chat and per-device fields.
 //
-// Env vars are injected automatically when a KV store is linked to the project:
-//   KV_REST_API_URL / KV_REST_API_TOKEN  (Vercel KV)
-// with a fallback to the raw Upstash names in case the integration uses those.
+// Storage is a zero-setup anonymous jsonblob.com store (user-approved, no
+// account, no dashboard step). If a Vercel KV store is ever linked the KV_*
+// env vars take over automatically — KV is more durable, so it wins when present.
+const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019e7649-54a5-70e7-a57a-ebf4086b76b7'
+
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
+const USE_KV = Boolean(KV_URL && KV_TOKEN)
 const STATE_KEY = 'shuyler-ridge-state'
 
-async function redis(command) {
-  const res = await fetch(`${KV_URL}/pipeline`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${KV_TOKEN}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(command),
-  })
-  if (!res.ok) {
-    throw new Error(`KV returned ${res.status}`)
-  }
-  return res.json()
+function isStateShape(value) {
+  return value && typeof value === 'object' && Array.isArray(value.weeks)
 }
 
-function readStored(getResult) {
-  const raw = getResult?.result
-  if (typeof raw !== 'string' || !raw) {
+// Read the current shared state from whichever backend is active.
+async function readShared() {
+  if (USE_KV) {
+    const res = await fetch(`${KV_URL}/pipeline`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${KV_TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify([['GET', STATE_KEY]]),
+    })
+    if (!res.ok) {
+      throw new Error(`KV returned ${res.status}`)
+    }
+    const [getResult] = await res.json()
+    const raw = getResult?.result
+    if (typeof raw !== 'string' || !raw) {
+      return null
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      return isStateShape(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+
+  const res = await fetch(STATE_BLOB, { headers: { accept: 'application/json' } })
+  if (!res.ok) {
     return null
   }
-  try {
-    const parsed = JSON.parse(raw)
-    if (parsed && Array.isArray(parsed.weeks)) {
-      return parsed
+  const parsed = await res.json().catch(() => null)
+  return isStateShape(parsed) ? parsed : null
+}
+
+// Write the merged shared state back to whichever backend is active.
+async function writeShared(state) {
+  if (USE_KV) {
+    const res = await fetch(`${KV_URL}/pipeline`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${KV_TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify([['SET', STATE_KEY, JSON.stringify(state)]]),
+    })
+    if (!res.ok) {
+      throw new Error(`KV returned ${res.status}`)
     }
-  } catch {
-    // Ignore an unparseable blob — treat it as no shared state yet.
+    return
   }
-  return null
+
+  const res = await fetch(STATE_BLOB, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ kind: 'shuyler-ridge-league-state', ...state }),
+  })
+  if (!res.ok) {
+    throw new Error(`jsonblob returned ${res.status}`)
+  }
 }
 
 function weekPickCount(week) {
@@ -103,21 +134,12 @@ function sanitize(state) {
 }
 
 export default async function handler(request, response) {
-  if (!KV_URL || !KV_TOKEN) {
-    // Store not linked yet — tell the client so it can stay on its local copy
-    // instead of treating this as a hard error.
-    response.status(200).json({ state: null, configured: false })
-    return
-  }
-
   try {
     if (request.method === 'POST') {
       const incomingRaw = typeof request.body === 'string' ? JSON.parse(request.body) : request.body
       const incoming = sanitize(incomingRaw)
 
-      const [getResult] = await redis([['GET', STATE_KEY]])
-      const stored = readStored(getResult)
-
+      const stored = await readShared()
       const merged = stored
         ? {
             players: mergePlayers(stored.players, incoming.players),
@@ -126,15 +148,15 @@ export default async function handler(request, response) {
           }
         : incoming
 
-      await redis([['SET', STATE_KEY, JSON.stringify(merged)]])
+      await writeShared(merged)
       response.setHeader('Cache-Control', 'no-store')
       response.status(200).json({ state: merged, configured: true })
       return
     }
 
-    const [getResult] = await redis([['GET', STATE_KEY]])
+    const stored = await readShared()
     response.setHeader('Cache-Control', 'no-store')
-    response.status(200).json({ state: readStored(getResult), configured: true })
+    response.status(200).json({ state: stored, configured: true })
   } catch {
     response.status(502).json({ error: 'League sync is unavailable right now.' })
   }
