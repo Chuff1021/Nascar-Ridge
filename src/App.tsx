@@ -75,6 +75,14 @@ type AppState = {
   messages: ChatMessage[]
 }
 
+// The shared, cross-device slice of league state stored in Vercel KV via
+// /api/state — everything friends should see in common, minus per-device fields.
+type SharedState = {
+  players?: Player[]
+  weeks?: Week[]
+  activeWeekId?: string
+}
+
 type LiveVehicle = {
   position: number
   vehicleNumber: string
@@ -352,6 +360,31 @@ function mergeSavedStates(states: AppState[]): AppState {
   )
 
   return { ...base, weeks: Array.from(byId.values()), messages }
+}
+
+// Fold the shared league blob (from /api/state) into this device's state. Local
+// always wins for per-device fields — who's logged in here, which week this
+// phone is viewing, and the local chat cache — while draws/players/results are
+// merged with the same "keep the richest lineup, never drop one" rule as
+// mergeSavedStates. This is how a neighbor's phone picks up the commissioner's
+// draw without ever clobbering anything it already had.
+function mergeSharedState(local: AppState, remote: SharedState): AppState {
+  const remoteSnapshot: AppState = {
+    ...local,
+    weeks: Array.isArray(remote.weeks) ? remote.weeks : [],
+    messages: [],
+  }
+  const merged = mergeSavedStates([local, remoteSnapshot])
+  const localIds = new Set(local.players.map((player) => player.id))
+  const extraPlayers = (remote.players ?? []).filter((player) => player && player.id && !localIds.has(player.id))
+  const players = extraPlayers.length ? [...local.players, ...extraPlayers] : local.players
+  return { ...merged, players }
+}
+
+// The slice of state we share across phones. currentUserId (per-device login)
+// and messages (their own endpoint) are intentionally excluded.
+function toSharedState(state: AppState): SharedState {
+  return { players: state.players, weeks: state.weeks, activeWeekId: state.activeWeekId }
 }
 
 function loadState(): AppState {
@@ -784,6 +817,7 @@ function App() {
   const hlsRef = useRef<Hls | null>(null)
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const backupInputRef = useRef<HTMLInputElement | null>(null)
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [backupNote, setBackupNote] = useState('')
   const [state, setState] = useState<AppState>(() => {
     const loaded = loadState()
@@ -1002,6 +1036,48 @@ function App() {
     }
   }, [activeView])
 
+  // Keep the shared league state (draws, players, results) in sync across every
+  // phone: pull the shared blob on load, on focus, and on a steady interval,
+  // merging it into local state. If the KV store isn't linked yet the endpoint
+  // reports configured:false and we quietly stay on the local copy.
+  useEffect(() => {
+    let active = true
+
+    async function pullSharedState() {
+      try {
+        const response = await fetch('/api/state', { cache: 'no-store' })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        if (!active || !data?.configured || !data.state || !Array.isArray(data.state.weeks)) {
+          return
+        }
+        setState((prev) => {
+          const merged = mergeSharedState(prev, data.state as SharedState)
+          if (JSON.stringify(merged.weeks) === JSON.stringify(prev.weeks) && merged.players.length === prev.players.length) {
+            return prev
+          }
+          saveState(merged)
+          return merged
+        })
+      } catch {
+        // Offline or store not linked — stay on the local copy.
+      }
+    }
+
+    pullSharedState()
+    const timer = window.setInterval(pullSharedState, 15000)
+    const onFocus = () => pullSharedState()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) {
@@ -1141,9 +1217,43 @@ function App() {
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
   }, [state.players, state.weeks])
 
+  function pushSharedState(next: AppState) {
+    if (pushTimerRef.current) {
+      window.clearTimeout(pushTimerRef.current)
+    }
+    // Debounce so a burst of edits (e.g. drawing every week) becomes one push.
+    pushTimerRef.current = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/state', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(toSharedState(next)),
+        })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        if (!data?.configured || !data.state || !Array.isArray(data.state.weeks)) {
+          return
+        }
+        // Fold the server's merged result back in so this phone also picks up
+        // anything another phone pushed in the meantime.
+        setState((prev) => {
+          const merged = mergeSharedState(prev, data.state as SharedState)
+          saveState(merged)
+          return merged
+        })
+      } catch {
+        // Offline or store not linked — the local save already happened, and the
+        // next successful push/pull will carry these changes to the shared blob.
+      }
+    }, 600)
+  }
+
   function updateState(next: AppState) {
     setState(next)
     saveState(next)
+    pushSharedState(next)
   }
 
   function updateWeek(weekId: string, updater: (week: Week) => Week) {
