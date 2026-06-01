@@ -74,10 +74,11 @@ async function writeShared(state) {
 }
 
 function weekPickCount(week) {
-  return Object.values(week?.assignments ?? {}).reduce(
+  const individual = Object.values(week?.assignments ?? {}).reduce(
     (total, picks) => total + (Array.isArray(picks) ? picks.length : 0),
     0,
   )
+  return individual + (Array.isArray(week?.communityTeams) ? week.communityTeams.length : 0)
 }
 
 function unionIds(a = [], b = []) {
@@ -103,10 +104,15 @@ function mergeWeeks(baseWeeks = [], incomingWeeks = []) {
     byId.set(week.id, {
       ...existing,
       assignments: richer ? week.assignments : existing.assignments,
+      communityTeams: richer ? week.communityTeams : existing.communityTeams ?? week.communityTeams,
       participantIds: unionIds(existing.participantIds, week.participantIds),
       paidBy: unionIds(existing.paidBy, week.paidBy),
       winnerId: existing.winnerId ?? week.winnerId,
       secondId: existing.secondId ?? week.secondId,
+      winningDriverNumber: existing.winningDriverNumber ?? week.winningDriverNumber,
+      winnerTeamIds: existing.winnerTeamIds ?? week.winnerTeamIds,
+      secondDriverNumber: existing.secondDriverNumber ?? week.secondDriverNumber,
+      secondTeamIds: existing.secondTeamIds ?? week.secondTeamIds,
     })
   }
   return Array.from(byId.values())

@@ -47,6 +47,13 @@ type Driver = {
   team: string
 }
 
+// A leftover "community" car co-owned by a small team of neighbors who split
+// the pot if it wins the race.
+type CommunityTeam = {
+  driver: Driver
+  memberIds: string[]
+}
+
 type Week = {
   id: string
   race: string
@@ -56,8 +63,15 @@ type Week = {
   participantIds: string[]
   paidBy: string[]
   assignments: Record<string, Driver[]>
+  communityTeams?: CommunityTeam[]
   winnerId?: string
   secondId?: string
+  // Auto-recorded from the live finish: the car that won and the owner(s) who
+  // take the pot (one id for an individual car, the whole team for a community car).
+  winningDriverNumber?: string
+  winnerTeamIds?: string[]
+  secondDriverNumber?: string
+  secondTeamIds?: string[]
 }
 
 type ChatMessage = {
@@ -294,7 +308,8 @@ function createOpenWeek(id: string, race: string, track: string, date: string, s
 }
 
 function weekPickCount(week: Week) {
-  return Object.values(week.assignments ?? {}).reduce((total, picks) => total + (picks?.length ?? 0), 0)
+  const individual = Object.values(week.assignments ?? {}).reduce((total, picks) => total + (picks?.length ?? 0), 0)
+  return individual + (week.communityTeams?.length ?? 0)
 }
 
 // Gather every saved snapshot on this device: the current key, the backup, and
@@ -346,9 +361,14 @@ function mergeSavedStates(states: AppState[]): AppState {
         byId.set(week.id, {
           ...existing,
           assignments: week.assignments,
+          communityTeams: week.communityTeams ?? existing.communityTeams,
           paidBy: existing.paidBy?.length ? existing.paidBy : week.paidBy,
           winnerId: existing.winnerId ?? week.winnerId,
           secondId: existing.secondId ?? week.secondId,
+          winningDriverNumber: existing.winningDriverNumber ?? week.winningDriverNumber,
+          winnerTeamIds: existing.winnerTeamIds ?? week.winnerTeamIds,
+          secondDriverNumber: existing.secondDriverNumber ?? week.secondDriverNumber,
+          secondTeamIds: existing.secondTeamIds ?? week.secondTeamIds,
         })
       }
     })
@@ -378,7 +398,16 @@ function mergeSharedState(local: AppState, remote: SharedState): AppState {
   const localIds = new Set(local.players.map((player) => player.id))
   const extraPlayers = (remote.players ?? []).filter((player) => player && player.id && !localIds.has(player.id))
   const players = extraPlayers.length ? [...local.players, ...extraPlayers] : local.players
-  return { ...merged, players }
+
+  // Follow the commissioner's active week so a neighbor lands on the race that
+  // was just drawn instead of staring at a stale week's "waiting on the draw."
+  // Only adopt it when that week actually exists locally.
+  const activeWeekId =
+    remote.activeWeekId && merged.weeks.some((week) => week.id === remote.activeWeekId)
+      ? remote.activeWeekId
+      : merged.activeWeekId
+
+  return { ...merged, players, activeWeekId }
 }
 
 // The slice of state we share across phones. currentUserId (per-device login)
@@ -554,23 +583,81 @@ function shuffle<T>(items: T[], seed?: string) {
   return result
 }
 
-function dealDrivers(roster: Player[], participantIds: string[], driverPool: Driver[], seed?: string) {
+// The authoritative field of cars for a draw is the live-feed entry list, not
+// the scanner mapping (which also carries Race Control, MRN, spotters, etc.).
+function fieldFromLiveRace(liveRace: LiveRace | undefined): Driver[] {
+  const seen = new Set<string>()
+  const field: Driver[] = []
+  for (const vehicle of liveRace?.vehicles ?? []) {
+    const number = (vehicle.vehicleNumber ?? '').trim()
+    const name = (vehicle.driverName ?? '').trim()
+    if (!number || number === '--' || !name || name === 'Unknown driver' || seen.has(number)) {
+      continue
+    }
+    seen.add(number)
+    field.push({ number, name, team: vehicle.manufacturer ?? '' })
+  }
+  return field
+}
+
+// Split N players into `teamCount` teams as evenly as possible: the first few
+// teams absorb the remainder. e.g. 12 players into 5 teams -> 3,3,2,2,2.
+function partitionTeams(playerIds: string[], teamCount: number): string[][] {
+  if (teamCount <= 0) {
+    return []
+  }
+  const teams: string[][] = []
+  const base = Math.floor(playerIds.length / teamCount)
+  const extra = playerIds.length % teamCount
+  let index = 0
+  for (let i = 0; i < teamCount; i += 1) {
+    const size = base + (i < extra ? 1 : 0)
+    teams.push(playerIds.slice(index, index + size))
+    index += size
+  }
+  return teams
+}
+
+// New draw model: every participant gets an EVEN number of individual cars
+// (floor(field / players)); the leftover cars become shared "community" cars,
+// one per team, with the players split into that many teams.
+function dealField(
+  roster: Player[],
+  participantIds: string[],
+  driverPool: Driver[],
+  seed?: string,
+): { assignments: Record<string, Driver[]>; communityTeams: CommunityTeam[] } {
   const participants = roster.filter((player) => participantIds.includes(player.id))
   const assignments = entriesToObject(roster.map((player) => [player.id, [] as Driver[]]))
 
   if (participants.length === 0 || driverPool.length === 0) {
-    return assignments
+    return { assignments, communityTeams: [] }
   }
 
   const playerOrder = shuffle(participants, seed ? `${seed}-players` : undefined)
   const driverOrder = shuffle(driverPool, seed ? `${seed}-drivers` : undefined)
 
-  driverOrder.forEach((driver, index) => {
-    const player = playerOrder[index % playerOrder.length]
-    assignments[player.id].push(driver)
+  const n = playerOrder.length
+  const base = Math.floor(driverOrder.length / n)
+  const individualCount = base * n
+
+  // Each player gets exactly `base` individual cars.
+  playerOrder.forEach((player, i) => {
+    assignments[player.id] = driverOrder.slice(i * base, i * base + base)
   })
 
-  return assignments
+  // Whatever's left over is shared by teams of neighbors — one car per team.
+  const leftover = driverOrder.slice(individualCount)
+  const teams = partitionTeams(
+    playerOrder.map((player) => player.id),
+    leftover.length,
+  )
+  const communityTeams: CommunityTeam[] = leftover.map((driver, i) => ({
+    driver,
+    memberIds: teams[i] ?? [],
+  }))
+
+  return { assignments, communityTeams }
 }
 
 function createNewWeek(race: string, roster: Player[]): Week {
@@ -592,6 +679,17 @@ function formatCurrency(value: number) {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
+  }).format(value)
+}
+
+// Split amounts can be fractional (a $45 pot two ways is $22.50), so show cents
+// when they aren't whole dollars instead of rounding and misstating the math.
+function formatSplit(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(value)
 }
 
@@ -744,6 +842,23 @@ function getLiveVehicle(liveRace: LiveRace | undefined, driver: Driver) {
   return liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
 }
 
+// Who holds a given car this week: a single player (individual car) or a whole
+// team (community car). Returns undefined if the car wasn't part of the draw.
+type CarOwnership = { memberIds: string[]; isCommunity: boolean; driver?: Driver }
+function ownersOfCar(week: Week, carNumber: string): CarOwnership | undefined {
+  for (const [playerId, picks] of Object.entries(week.assignments ?? {})) {
+    const match = picks.find((driver) => driver.number === carNumber)
+    if (match) {
+      return { memberIds: [playerId], isCommunity: false, driver: match }
+    }
+  }
+  const team = (week.communityTeams ?? []).find((entry) => entry.driver.number === carNumber)
+  if (team) {
+    return { memberIds: team.memberIds, isCommunity: true, driver: team.driver }
+  }
+  return undefined
+}
+
 function startingPositionLabel(vehicle: LiveVehicle | undefined) {
   return vehicle?.startingPosition ? `Start ${vehicle.startingPosition}` : 'Start --'
 }
@@ -764,6 +879,18 @@ function isLiveTimingActive(race: LiveRace | undefined) {
   const isCompleted = race.lapsInRace > 0 && race.lapNumber >= race.lapsInRace && race.lapsToGo === 0
 
   return race.flagState !== 9 && !isCompleted
+}
+
+// True once a race is over (checkered flag, or all scheduled laps run). Used to
+// lock in the pot winner from the final running order.
+function isRaceFinal(race: LiveRace | undefined) {
+  if (!race) {
+    return false
+  }
+  if (race.flagState === 4) {
+    return true
+  }
+  return race.lapsInRace > 0 && race.lapsToGo === 0 && race.lapNumber >= race.lapsInRace
 }
 
 function DriverFace({
@@ -864,6 +991,9 @@ function App() {
     : publicViews
   const participants = state.players.filter((player) => activeWeek.participantIds.includes(player.id))
   const myDrivers = currentUser ? activeWeek.assignments[currentUser.id] ?? [] : []
+  const myCommunityTeam = currentUser
+    ? activeWeek.communityTeams?.find((team) => team.memberIds.includes(currentUser.id))
+    : undefined
   const selectedLiveParticipants = state.players.filter((player) => selectedLiveWeek.participantIds.includes(player.id))
   const selectedLiveDrawn = hasDraw(selectedLiveWeek)
   const activeWeekIndex = state.weeks.findIndex((week) => week.id === activeWeek.id)
@@ -1264,13 +1394,62 @@ function App() {
   }
 
   function drawWeek() {
+    updateWeek(activeWeek.id, (week) => {
+      // Prefer the live entry list (the real field of cars) when this week's
+      // race is actually on track; fall back to the cached series roster
+      // otherwise. The live field never contains officials/scanner channels.
+      const liveField = fieldFromLiveRace(liveRace)
+      const pool = liveField.length >= 15 ? liveField : rostersBySeries[week.seriesId] ?? drivers
+      const { assignments, communityTeams } = dealField(state.players, week.participantIds, pool)
+
+      return {
+        ...week,
+        assignments,
+        communityTeams,
+        winnerId: undefined,
+        secondId: undefined,
+        winningDriverNumber: undefined,
+        winnerTeamIds: undefined,
+        secondDriverNumber: undefined,
+        secondTeamIds: undefined,
+      }
+    })
+  }
+
+  // When the race goes final, lock in the pot result from the running order:
+  // the owner(s) of the P1 car win, P2 gets second. For a community car the
+  // whole team is recorded. We only write once (guarded by winningDriverNumber)
+  // and only when the finishing car was actually part of this week's draw, which
+  // also stops a different series' feed from recording a bogus result.
+  useEffect(() => {
+    if (!isRaceFinal(liveRace) || !liveRace || !hasDraw(activeWeek) || activeWeek.winningDriverNumber) {
+      return
+    }
+    const winnerCar = liveRace.vehicles.find((vehicle) => vehicle.position === 1)
+    const secondCar = liveRace.vehicles.find((vehicle) => vehicle.position === 2)
+    if (!winnerCar) {
+      return
+    }
+    const winnerOwners = ownersOfCar(activeWeek, winnerCar.vehicleNumber)
+    if (!winnerOwners) {
+      return
+    }
+    const secondOwners = secondCar ? ownersOfCar(activeWeek, secondCar.vehicleNumber) : undefined
+
+    // Recording the final result in response to the live feed is the intended
+    // behavior here; the guards above ensure it runs at most once per week.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     updateWeek(activeWeek.id, (week) => ({
       ...week,
-      assignments: dealDrivers(state.players, week.participantIds, rostersBySeries[week.seriesId] ?? drivers),
-      winnerId: undefined,
-      secondId: undefined,
+      winningDriverNumber: winnerCar.vehicleNumber,
+      winnerTeamIds: winnerOwners.memberIds,
+      winnerId: winnerOwners.memberIds[0],
+      secondDriverNumber: secondOwners ? secondCar?.vehicleNumber : week.secondDriverNumber,
+      secondTeamIds: secondOwners ? secondOwners.memberIds : week.secondTeamIds,
+      secondId: secondOwners ? secondOwners.memberIds[0] : week.secondId,
     }))
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveRace, activeWeek.id, activeWeek.winningDriverNumber])
 
   function selectWeekendSeries(seriesId: SeriesId) {
     const race = weekendBySeries[String(seriesId)]
@@ -1581,6 +1760,15 @@ function App() {
   const participantCount = activeWeek.participantIds.length
   const drawComplete = participants.every((player) => (activeWeek.assignments[player.id] ?? []).length > 0)
 
+  // Pot outcome for the active week. Once a winning car is recorded we know who
+  // takes the money; a community car splits the payout equally among its team.
+  const winnerNames = (activeWeek.winnerTeamIds ?? (activeWeek.winnerId ? [activeWeek.winnerId] : []))
+    .map((id) => state.players.find((player) => player.id === id)?.name)
+    .filter((name): name is string => Boolean(name))
+  const winnerIsCommunity = (activeWeek.winnerTeamIds?.length ?? 0) > 1
+  const winnerShare = winnerNames.length > 0 ? winnerPayout / winnerNames.length : winnerPayout
+  const iWonShare = currentUser ? (activeWeek.winnerTeamIds ?? []).includes(currentUser.id) || activeWeek.winnerId === currentUser.id : false
+
   if (!isLoggedIn) {
     return (
       <main className="login-shell">
@@ -1787,6 +1975,70 @@ function App() {
             </div>
           )}
 
+          {myCommunityTeam && (
+            <article className="community-card">
+              <DriverFace
+                driverId={driverIdByName[driverKey(myCommunityTeam.driver.name)]}
+                seriesId={activeWeek.seriesId}
+                color={currentUser.color}
+                initial={myCommunityTeam.driver.name.slice(0, 1)}
+              />
+              <div className="car-number">#{myCommunityTeam.driver.number}</div>
+              <div>
+                <span className="community-tag">
+                  <UsersRound size={12} /> Community car
+                </span>
+                <h3>{myCommunityTeam.driver.name}</h3>
+                <p>
+                  {(() => {
+                    const mates = myCommunityTeam.memberIds
+                      .filter((id) => id !== currentUser.id)
+                      .map((id) => state.players.find((player) => player.id === id)?.name)
+                      .filter((name): name is string => Boolean(name))
+                    const each = formatSplit(winnerPayout / Math.max(1, myCommunityTeam.memberIds.length))
+                    return mates.length
+                      ? `Shared with ${mates.join(', ')} · splits to ${each} each if it wins`
+                      : `Your shared car · ${each} if it wins`
+                  })()}
+                </p>
+              </div>
+              <div className="driver-actions">
+                {(() => {
+                  const liveCar = getLiveVehicle(activeLiveRace, myCommunityTeam.driver)
+                  const channel = audioChannels.find((item) => item.driverNumber === myCommunityTeam.driver.number)
+                  return (
+                    <>
+                      {liveCar && <strong>P{liveCar.position}</strong>}
+                      <button
+                        type="button"
+                        onClick={() => channel && playScanner(channel)}
+                        disabled={!channel}
+                        aria-label={`Listen to ${myCommunityTeam.driver.name}`}
+                      >
+                        <Headphones size={16} />
+                      </button>
+                    </>
+                  )
+                })()}
+              </div>
+            </article>
+          )}
+
+          {activeWeek.winningDriverNumber && winnerNames.length > 0 && (
+            <div className={`pot-result ${iWonShare ? 'won' : ''}`}>
+              <Crown size={20} />
+              <div>
+                <strong>#{activeWeek.winningDriverNumber} won the race</strong>
+                <p>
+                  {winnerIsCommunity
+                    ? `${winnerNames.join(' & ')} split ${formatCurrency(winnerPayout)} — ${formatSplit(winnerShare)} each`
+                    : `${winnerNames[0]} takes ${formatCurrency(winnerPayout)}`}
+                  {iWonShare ? ' · that includes you 🎉' : ''}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="quick-grid">
             <div className="metric-tile">
               <span>Paid this week</span>
@@ -1886,6 +2138,24 @@ function App() {
                   ) : (
                     <p className="lineup-empty">Waiting on Colton to draw this race.</p>
                   )}
+
+                  {(() => {
+                    const team = activeWeek.communityTeams?.find((entry) => entry.memberIds.includes(player.id))
+                    if (!team) {
+                      return null
+                    }
+                    const liveCar = getLiveVehicle(activeLiveRace, team.driver)
+                    const shareCount = team.memberIds.length
+                    return (
+                      <div className="lineup-community">
+                        <UsersRound size={12} />
+                        <span>
+                          Shares #{team.driver.number} {team.driver.name} ({shareCount}-way)
+                        </span>
+                        {liveCar && <span className="driver-pos">P{liveCar.position}</span>}
+                      </div>
+                    )
+                  })()}
                 </article>
               ))}
             </div>
@@ -1893,8 +2163,13 @@ function App() {
 
           <div className="history-list">
             {state.weeks.map((week) => {
-              const winner = state.players.find((player) => player.id === week.winnerId)
+              const winnerIds = week.winnerTeamIds ?? (week.winnerId ? [week.winnerId] : [])
+              const winnerLabel = winnerIds
+                .map((id) => state.players.find((player) => player.id === id)?.name)
+                .filter(Boolean)
+                .join(' & ')
               const second = state.players.find((player) => player.id === week.secondId)
+              const communityWin = (week.winnerTeamIds?.length ?? 0) > 1
 
               return (
                 <article className="history-row" key={week.id}>
@@ -1905,8 +2180,13 @@ function App() {
                     </p>
                   </div>
                   <div>
-                    <span>{winner?.name ?? 'Open'}</span>
-                    <small>{second ? `${second.name} got $5 back` : 'Second TBD'}</small>
+                    <span>
+                      {winnerLabel || 'Open'}
+                      {week.winningDriverNumber ? ` · #${week.winningDriverNumber}` : ''}
+                    </span>
+                    <small>
+                      {communityWin ? 'shared win, split pot' : second ? `${second.name} got $5 back` : 'Second TBD'}
+                    </small>
                   </div>
                 </article>
               )
