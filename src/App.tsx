@@ -1180,11 +1180,30 @@ function App() {
           return
         }
         const data = await response.json()
-        if (!active || !data?.configured || !data.state || !Array.isArray(data.state.weeks)) {
+        if (!active || !data?.configured) {
+          return
+        }
+        const remote = data.state
+        const remoteEmpty =
+          !remote || !Array.isArray(remote.weeks) || remote.weeks.every((week: Week) => weekPickCount(week) === 0)
+        if (remoteEmpty) {
+          // The shared store is empty — fresh, or it was purged and recreated.
+          // If THIS phone already holds a drawn lineup, re-seed the store so the
+          // league repopulates without anyone having to draw again.
+          setState((prev) => {
+            if (hasAnyDraw(prev)) {
+              void fetch('/api/state', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(toSharedState(prev)),
+              }).catch(() => {})
+            }
+            return prev
+          })
           return
         }
         setState((prev) => {
-          const merged = mergeSharedState(prev, data.state as SharedState)
+          const merged = mergeSharedState(prev, remote as SharedState)
           if (JSON.stringify(merged.weeks) === JSON.stringify(prev.weeks) && merged.players.length === prev.players.length) {
             return prev
           }

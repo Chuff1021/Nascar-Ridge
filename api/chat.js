@@ -6,7 +6,7 @@
 // env vars take over automatically — KV gives atomic list ops, so it wins when
 // present. With jsonblob we read-modify-write and merge by id, which is fine for
 // a small league (a rare simultaneous post just re-syncs on the next pull).
-const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019e7649-55f3-737a-be34-32c76cc91151'
+const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019e8441-83b9-76e6-a75b-4c6add9afb08'
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN

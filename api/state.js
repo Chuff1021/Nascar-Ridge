@@ -6,7 +6,7 @@
 // Storage is a zero-setup anonymous jsonblob.com store (user-approved, no
 // account, no dashboard step). If a Vercel KV store is ever linked the KV_*
 // env vars take over automatically — KV is more durable, so it wins when present.
-const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019e7649-54a5-70e7-a57a-ebf4086b76b7'
+const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019e8441-8241-70e5-bec7-91485786c228'
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
