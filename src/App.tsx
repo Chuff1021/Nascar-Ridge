@@ -12,7 +12,6 @@ import {
   LogOut,
   MessageCircle,
   Pause,
-  Play,
   Plus,
   RadioTower,
   RefreshCw,
@@ -124,6 +123,15 @@ type AudioChannel = {
   driverName: string
   url: string
   requiresAuth: boolean
+}
+
+// One concurrently-playing scanner stream. The analyser lets us read the live
+// audio level so we can highlight whichever driver is actually talking.
+type ScannerPlayer = {
+  audio: HTMLAudioElement
+  hls?: Hls
+  analyser?: AnalyserNode
+  data?: Uint8Array<ArrayBuffer>
 }
 
 type BeforeInstallPromptEvent = Event & {
@@ -863,10 +871,6 @@ function startingPositionLabel(vehicle: LiveVehicle | undefined) {
   return vehicle?.startingPosition ? `Start ${vehicle.startingPosition}` : 'Start --'
 }
 
-function scannerLabel(channel: AudioChannel) {
-  return channel.driverNumber === 'All Scan' ? 'All Scan' : `#${channel.driverNumber} ${channel.driverName}`
-}
-
 function hasDraw(week: Week) {
   return Object.values(week.assignments).some((assigned) => assigned.length > 0)
 }
@@ -940,8 +944,11 @@ function CarBadge({ number, seriesId }: { number: string; seriesId: SeriesId }) 
 }
 
 function App() {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const hlsRef = useRef<Hls | null>(null)
+  // Multi-stream scanner mixer: each selected driver gets its own audio element
+  // + hls instance + Web Audio analyser, keyed by car number, so several can
+  // play at once and we can tell who's actually talking.
+  const scannerPlayersRef = useRef<Map<string, ScannerPlayer>>(new Map())
+  const audioCtxRef = useRef<AudioContext | null>(null)
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const backupInputRef = useRef<HTMLInputElement | null>(null)
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -963,9 +970,10 @@ function App() {
   const [liveStatus, setLiveStatus] = useState('Connecting to NASCAR timing...')
   const [audioChannels, setAudioChannels] = useState<AudioChannel[]>([])
   const [scannerStatus, setScannerStatus] = useState('Loading NASCAR scanner channels...')
-  const [activeAudio, setActiveAudio] = useState<AudioChannel>()
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false)
+  const [activeScanners, setActiveScanners] = useState<string[]>([])
+  const [speakingNumbers, setSpeakingNumbers] = useState<string[]>([])
   const [audioError, setAudioError] = useState('')
+  const isAudioPlaying = activeScanners.length > 0
   const [canInstall, setCanInstall] = useState(false)
   const [isRefreshingLive, setIsRefreshingLive] = useState(false)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
@@ -1012,6 +1020,7 @@ function App() {
     myDrivers.some((driver) => driver.number === vehicle.vehicleNumber),
   )
   const allScanChannel = audioChannels.find((channel) => channel.driverNumber === 'All Scan')
+  const talkingChannels = audioChannels.filter((channel) => speakingNumbers.includes(channel.driverNumber))
   const myAudioChannels = myDrivers
     .map((driver) => audioChannels.find((channel) => channel.driverNumber === driver.number))
     .filter((channel): channel is AudioChannel => Boolean(channel))
@@ -1227,41 +1236,53 @@ function App() {
     }
   }, [])
 
+  // While any scanners are playing, poll each stream's audio level and mark the
+  // drivers who are currently talking. Updates state only when the set changes
+  // so we don't churn React every animation frame.
   useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) {
+    if (activeScanners.length === 0) {
       return undefined
     }
-
-    function handlePlay() {
-      setIsAudioPlaying(true)
+    let frame = 0
+    const tick = () => {
+      const talking: string[] = []
+      for (const [number, player] of scannerPlayersRef.current.entries()) {
+        if (player.analyser && player.data) {
+          player.analyser.getByteTimeDomainData(player.data)
+          let peak = 0
+          for (let i = 0; i < player.data.length; i += 1) {
+            const deviation = Math.abs(player.data[i] - 128)
+            if (deviation > peak) {
+              peak = deviation
+            }
+          }
+          if (peak > 9) {
+            talking.push(number)
+          }
+        }
+      }
+      setSpeakingNumbers((current) => {
+        if (current.length === talking.length && current.every((n) => talking.includes(n))) {
+          return current
+        }
+        return talking
+      })
+      frame = window.requestAnimationFrame(tick)
     }
+    frame = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeScanners.length])
 
-    function handlePause() {
-      setIsAudioPlaying(false)
-    }
-
-    function handleError() {
-      setIsAudioPlaying(false)
-      setAudioError('That scanner stream could not play. It may require NASCAR account access or an active race session.')
-    }
-
-    audio.addEventListener('play', handlePlay)
-    audio.addEventListener('pause', handlePause)
-    audio.addEventListener('ended', handlePause)
-    audio.addEventListener('error', handleError)
-
-    return () => {
-      audio.removeEventListener('play', handlePlay)
-      audio.removeEventListener('pause', handlePause)
-      audio.removeEventListener('ended', handlePause)
-      audio.removeEventListener('error', handleError)
-    }
-  }, [])
-
+  // Tear every scanner down on unmount.
   useEffect(() => {
+    const players = scannerPlayersRef.current
     return () => {
-      hlsRef.current?.destroy()
+      for (const player of players.values()) {
+        player.hls?.destroy()
+        player.audio.pause()
+      }
+      players.clear()
+      audioCtxRef.current?.close().catch(() => {})
     }
   }, [])
 
@@ -1658,41 +1679,64 @@ function App() {
     input.value = ''
   }
 
-  async function playScanner(channel: AudioChannel) {
-    const audio = audioRef.current
-    if (!audio) {
+  // Web Audio context, created lazily on first play (and resumed inside the user
+  // gesture). Used purely to read each stream's level for the "who's talking"
+  // highlight — playback still routes out through the analyser to the speakers.
+  function ensureAudioContext() {
+    if (!audioCtxRef.current) {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (Ctx) {
+        audioCtxRef.current = new Ctx()
+      }
+    }
+    audioCtxRef.current?.resume().catch(() => {})
+    return audioCtxRef.current
+  }
+
+  async function startScanner(channel: AudioChannel) {
+    if (scannerPlayersRef.current.has(channel.driverNumber)) {
       return
     }
 
+    const audio = document.createElement('audio')
+    audio.crossOrigin = 'anonymous'
+    audio.preload = 'none'
+    audio.setAttribute('playsinline', '')
+    const player: ScannerPlayer = { audio }
+    scannerPlayersRef.current.set(channel.driverNumber, player)
+    setActiveScanners((current) => (current.includes(channel.driverNumber) ? current : [...current, channel.driverNumber]))
     setAudioError('')
-    setActiveAudio(channel)
-    hlsRef.current?.destroy()
-    hlsRef.current = null
-    audio.pause()
-    audio.removeAttribute('src')
-    audio.load()
+
+    // Tap the element for level analysis. If this throws (older Safari / native
+    // HLS), the stream still plays — we just can't light up the speaker.
+    const ctx = ensureAudioContext()
+    if (ctx) {
+      try {
+        const source = ctx.createMediaElementSource(audio)
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        source.connect(analyser)
+        analyser.connect(ctx.destination)
+        player.analyser = analyser
+        player.data = new Uint8Array(analyser.frequencyBinCount)
+      } catch {
+        // Analysis unavailable on this platform; playback is unaffected.
+      }
+    }
 
     try {
       const { default: HlsPlayer } = await import('hls.js')
-
       if (HlsPlayer.isSupported()) {
-        const hls = new HlsPlayer({
-          enableWorker: true,
-          liveSyncDurationCount: 2,
-        })
-
+        const hls = new HlsPlayer({ enableWorker: true, liveSyncDurationCount: 2 })
         hls.on(HlsPlayer.Events.ERROR, (_event, data) => {
           if (data.fatal) {
-            setAudioError('Scanner stream failed. It may be offline, auth-gated, or between live sessions.')
-            setIsAudioPlaying(false)
-            hls.destroy()
-            hlsRef.current = null
+            setAudioError(`#${channel.driverNumber} scanner dropped — it may be offline or between sessions.`)
+            stopScanner(channel.driverNumber)
           }
         })
-
         hls.loadSource(channel.url)
         hls.attachMedia(audio)
-        hlsRef.current = hls
+        player.hls = hls
         await audio.play()
         return
       }
@@ -1704,18 +1748,55 @@ function App() {
       }
 
       setAudioError('This browser cannot play NASCAR HLS scanner streams.')
+      stopScanner(channel.driverNumber)
     } catch {
-      setAudioError('Tap play again after the scanner loads, or try during a live NASCAR session.')
-      setIsAudioPlaying(false)
+      setAudioError('Tap the driver again to start the scanner, or try during a live session.')
+      stopScanner(channel.driverNumber)
     }
   }
 
-  function stopScanner() {
-    const audio = audioRef.current
-    audio?.pause()
-    hlsRef.current?.destroy()
-    hlsRef.current = null
-    setIsAudioPlaying(false)
+  function stopScanner(driverNumber: string) {
+    const player = scannerPlayersRef.current.get(driverNumber)
+    if (!player) {
+      return
+    }
+    player.hls?.destroy()
+    player.audio.pause()
+    player.audio.removeAttribute('src')
+    try {
+      player.audio.load()
+    } catch {
+      // ignore teardown races
+    }
+    scannerPlayersRef.current.delete(driverNumber)
+    setActiveScanners((current) => current.filter((number) => number !== driverNumber))
+    setSpeakingNumbers((current) => current.filter((number) => number !== driverNumber))
+  }
+
+  function stopAllScanners() {
+    for (const number of Array.from(scannerPlayersRef.current.keys())) {
+      stopScanner(number)
+    }
+  }
+
+  // Add or remove a driver from the live mix (used by the multi-select grid).
+  function toggleScanner(channel: AudioChannel) {
+    if (scannerPlayersRef.current.has(channel.driverNumber)) {
+      stopScanner(channel.driverNumber)
+    } else {
+      void startScanner(channel)
+    }
+  }
+
+  // Single-exclusive listen (Garage / community / "All Scan" quick buttons):
+  // tapping plays just that channel; tapping the only active one stops it.
+  function playScanner(channel: AudioChannel) {
+    const wasOnlyActive =
+      scannerPlayersRef.current.size === 1 && scannerPlayersRef.current.has(channel.driverNumber)
+    stopAllScanners()
+    if (!wasOnlyActive) {
+      void startScanner(channel)
+    }
   }
 
   async function refreshLiveNow() {
@@ -1871,7 +1952,6 @@ function App() {
         <div className="track-lighting" aria-hidden="true" />
       </section>
 
-      <audio ref={audioRef} className={`global-scanner-audio ${activeAudio ? 'visible' : ''}`} controls playsInline />
 
       {activeView === 'garage' && currentUser && (
         <section className="screen">
@@ -2324,30 +2404,45 @@ function App() {
             <div className="live-topline">
               <div>
                 <p className="eyebrow">Live driver radio</p>
-                <h2>{activeAudio ? scannerLabel(activeAudio) : 'Scanner ready'}</h2>
+                <h2>
+                  {talkingChannels.length > 0
+                    ? talkingChannels.map((channel) => `#${channel.driverNumber} ${channel.driverName}`).join(', ')
+                    : activeScanners.length > 0
+                      ? `Listening to ${activeScanners.length} driver${activeScanners.length > 1 ? 's' : ''}`
+                      : 'Scanner ready'}
+                </h2>
               </div>
-              <div className="flag-chip scanner-chip">
+              <div className={`flag-chip scanner-chip ${talkingChannels.length > 0 ? 'talking' : ''}`}>
                 <Volume2 size={14} />
-                {isAudioPlaying ? 'Live' : 'Idle'}
+                {talkingChannels.length > 0 ? 'Talking' : isAudioPlaying ? 'Live' : 'Idle'}
               </div>
             </div>
 
             <p>{audioError || scannerStatus}</p>
 
             <div className="scanner-controls">
-              {activeAudio && (
-                <button type="button" onClick={isAudioPlaying ? stopScanner : () => playScanner(activeAudio)}>
-                  {isAudioPlaying ? <Pause size={17} /> : <Play size={17} />}
-                  {isAudioPlaying ? 'Stop' : 'Resume'}
-                </button>
-              )}
               {allScanChannel && (
-                <button type="button" onClick={() => playScanner(allScanChannel)}>
+                <button
+                  type="button"
+                  className={activeScanners.includes('All Scan') ? 'active' : ''}
+                  onClick={() => playScanner(allScanChannel)}
+                >
                   <RadioTower size={17} />
                   All Scan
                 </button>
               )}
+              {isAudioPlaying && (
+                <button type="button" onClick={stopAllScanners}>
+                  <Pause size={17} />
+                  Stop all
+                </button>
+              )}
             </div>
+
+            <p className="scanner-hint">
+              Tap drivers below to build your own mix — listen to several at once and the one talking lights up.
+              {allScanChannel ? ' “All Scan” is NASCAR’s single combined feed, so it can’t show who’s speaking.' : ''}
+            </p>
 
             {myAudioChannels.length > 0 && (
               <>
@@ -2358,10 +2453,12 @@ function App() {
                 <div className="scanner-grid">
                   {myAudioChannels.map((channel) => (
                     <button
-                      className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                      className={`${activeScanners.includes(channel.driverNumber) ? 'active' : ''} ${
+                        speakingNumbers.includes(channel.driverNumber) ? 'speaking' : ''
+                      }`}
                       type="button"
                       key={`my-${channel.driverNumber}`}
-                      onClick={() => playScanner(channel)}
+                      onClick={() => toggleScanner(channel)}
                     >
                       <span>{channel.driverNumber === 'All Scan' ? 'ALL' : `#${channel.driverNumber}`}</span>
                       <strong>{channel.driverName}</strong>
@@ -2380,10 +2477,12 @@ function App() {
                 <div className="scanner-grid">
                   {liveAudioChannels.map((channel) => (
                     <button
-                      className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                      className={`${activeScanners.includes(channel.driverNumber) ? 'active' : ''} ${
+                        speakingNumbers.includes(channel.driverNumber) ? 'speaking' : ''
+                      }`}
                       type="button"
                       key={`live-${channel.driverNumber}`}
-                      onClick={() => playScanner(channel)}
+                      onClick={() => toggleScanner(channel)}
                     >
                       <span>#{channel.driverNumber}</span>
                       <strong>{channel.driverName}</strong>
@@ -2395,15 +2494,17 @@ function App() {
 
             <div className="mini-title scanner-title">
               <Headphones size={18} />
-              Listen to any driver
+              Build your mix — tap to add or remove
             </div>
             <div className="scanner-grid">
               {allDriverChannels.map((channel) => (
                 <button
-                  className={activeAudio?.driverNumber === channel.driverNumber ? 'active' : ''}
+                  className={`${activeScanners.includes(channel.driverNumber) ? 'active' : ''} ${
+                    speakingNumbers.includes(channel.driverNumber) ? 'speaking' : ''
+                  }`}
                   type="button"
                   key={`all-${channel.driverNumber}`}
-                  onClick={() => playScanner(channel)}
+                  onClick={() => toggleScanner(channel)}
                 >
                   <span>#{channel.driverNumber}</span>
                   <strong>{channel.driverName}</strong>
