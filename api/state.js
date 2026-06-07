@@ -3,42 +3,42 @@
 // every neighbor's phone. Chat lives in its own store (see api/chat.js); this
 // endpoint deliberately ignores chat and per-device fields.
 //
-// Storage is a zero-setup anonymous jsonblob.com store (user-approved, no
-// account, no dashboard step). If a Vercel KV store is ever linked the KV_*
-// env vars take over automatically — KV is more durable, so it wins when present.
-const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6b7d-72fa-b432-a5c083fe897a'
+// Storage backends, in priority order:
+//   1. Neon Postgres (durable, never purges) when a connection string is set —
+//      DATABASE_URL / POSTGRES_URL / NEON_DATABASE_URL.
+//   2. A zero-setup anonymous jsonblob.com store as the fallback (works with no
+//      setup, but the free blobs get purged after a few idle days).
+import { neon } from '@neondatabase/serverless'
 
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
-const USE_KV = Boolean(KV_URL && KV_TOKEN)
-const STATE_KEY = 'shuyler-ridge-state'
+const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6b7d-72fa-b432-a5c083fe897a'
+const DB_URL =
+  process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
+const sql = DB_URL ? neon(DB_URL) : null
+const STATE_ID = 'current'
 
 function isStateShape(value) {
   return value && typeof value === 'object' && Array.isArray(value.weeks)
 }
 
+let schemaReady = null
+function ensureSchema() {
+  if (!schemaReady) {
+    schemaReady = sql`CREATE TABLE IF NOT EXISTS league_state (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`
+  }
+  return schemaReady
+}
+
 // Read the current shared state from whichever backend is active.
 async function readShared() {
-  if (USE_KV) {
-    const res = await fetch(`${KV_URL}/pipeline`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${KV_TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify([['GET', STATE_KEY]]),
-    })
-    if (!res.ok) {
-      throw new Error(`KV returned ${res.status}`)
-    }
-    const [getResult] = await res.json()
-    const raw = getResult?.result
-    if (typeof raw !== 'string' || !raw) {
-      return null
-    }
-    try {
-      const parsed = JSON.parse(raw)
-      return isStateShape(parsed) ? parsed : null
-    } catch {
-      return null
-    }
+  if (sql) {
+    await ensureSchema()
+    const rows = await sql`SELECT data FROM league_state WHERE id = ${STATE_ID}`
+    const data = rows[0]?.data
+    return isStateShape(data) ? data : null
   }
 
   const res = await fetch(STATE_BLOB, { headers: { accept: 'application/json' } })
@@ -51,15 +51,11 @@ async function readShared() {
 
 // Write the merged shared state back to whichever backend is active.
 async function writeShared(state) {
-  if (USE_KV) {
-    const res = await fetch(`${KV_URL}/pipeline`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${KV_TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify([['SET', STATE_KEY, JSON.stringify(state)]]),
-    })
-    if (!res.ok) {
-      throw new Error(`KV returned ${res.status}`)
-    }
+  if (sql) {
+    await ensureSchema()
+    await sql`INSERT INTO league_state (id, data, updated_at)
+      VALUES (${STATE_ID}, ${JSON.stringify(state)}::jsonb, now())
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`
     return
   }
 

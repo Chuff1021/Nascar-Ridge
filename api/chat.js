@@ -1,17 +1,16 @@
 // Shared league chat. Every phone reads and writes the same store so the
 // conversation is identical everywhere and survives code deploys.
 //
-// Storage is a zero-setup anonymous jsonblob.com store (user-approved, no
-// account, no dashboard step). If a Vercel KV store is ever linked the KV_*
-// env vars take over automatically — KV gives atomic list ops, so it wins when
-// present. With jsonblob we read-modify-write and merge by id, which is fine for
-// a small league (a rare simultaneous post just re-syncs on the next pull).
-const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6cf5-7a9a-91d6-0585bf95bda5'
+// Storage backends, in priority order:
+//   1. Neon Postgres (durable; one row per message, so no read-modify-write
+//      race) when a connection string is set.
+//   2. A zero-setup anonymous jsonblob.com store as the fallback.
+import { neon } from '@neondatabase/serverless'
 
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
-const USE_KV = Boolean(KV_URL && KV_TOKEN)
-const CHAT_KEY = 'shuyler-ridge-chat'
+const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6cf5-7a9a-91d6-0585bf95bda5'
+const DB_URL =
+  process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
+const sql = DB_URL ? neon(DB_URL) : null
 const MAX_MESSAGES = 500
 
 function isMessage(value) {
@@ -32,38 +31,26 @@ function mergeMessages(...lists) {
     .slice(-MAX_MESSAGES)
 }
 
-async function kv(command) {
-  const res = await fetch(`${KV_URL}/pipeline`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${KV_TOKEN}`, 'content-type': 'application/json' },
-    body: JSON.stringify(command),
-  })
-  if (!res.ok) {
-    throw new Error(`KV returned ${res.status}`)
+let schemaReady = null
+function ensureSchema() {
+  if (!schemaReady) {
+    schemaReady = sql`CREATE TABLE IF NOT EXISTS chat_messages (
+      id text PRIMARY KEY,
+      player_id text NOT NULL,
+      body text NOT NULL,
+      sent_at text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`
   }
-  return res.json()
-}
-
-function parseKvRows(lrangeResult) {
-  const rows = Array.isArray(lrangeResult?.result) ? lrangeResult.result : []
-  const messages = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row)
-      if (isMessage(parsed)) {
-        messages.push(parsed)
-      }
-    } catch {
-      // Skip anything that isn't a valid stored message.
-    }
-  }
-  return messages
+  return schemaReady
 }
 
 async function readMessages() {
-  if (USE_KV) {
-    const [lrange] = await kv([['LRANGE', CHAT_KEY, '0', '-1']])
-    return parseKvRows(lrange)
+  if (sql) {
+    await ensureSchema()
+    const rows = await sql`SELECT id, player_id, body, sent_at FROM chat_messages
+      ORDER BY sent_at ASC LIMIT ${MAX_MESSAGES}`
+    return rows.map((row) => ({ id: row.id, playerId: row.player_id, body: row.body, sentAt: row.sent_at }))
   }
   const res = await fetch(CHAT_BLOB, { headers: { accept: 'application/json' } })
   if (!res.ok) {
@@ -74,13 +61,13 @@ async function readMessages() {
 }
 
 async function appendMessage(message) {
-  if (USE_KV) {
-    const [, , lrange] = await kv([
-      ['RPUSH', CHAT_KEY, JSON.stringify(message)],
-      ['LTRIM', CHAT_KEY, String(-MAX_MESSAGES), '-1'],
-      ['LRANGE', CHAT_KEY, '0', '-1'],
-    ])
-    return parseKvRows(lrange)
+  if (sql) {
+    await ensureSchema()
+    // One row per message — atomic, no read-modify-write race.
+    await sql`INSERT INTO chat_messages (id, player_id, body, sent_at)
+      VALUES (${message.id}, ${message.playerId}, ${message.body}, ${message.sentAt})
+      ON CONFLICT (id) DO NOTHING`
+    return readMessages()
   }
   const existing = await readMessages()
   const merged = mergeMessages(existing, [message])
