@@ -410,15 +410,11 @@ function mergeSharedState(local: AppState, remote: SharedState): AppState {
   const extraPlayers = (remote.players ?? []).filter((player) => player && player.id && !localIds.has(player.id))
   const players = extraPlayers.length ? [...local.players, ...extraPlayers] : local.players
 
-  // Follow the commissioner's active week so a neighbor lands on the race that
-  // was just drawn instead of staring at a stale week's "waiting on the draw."
-  // Only adopt it when that week actually exists locally.
-  const activeWeekId =
-    remote.activeWeekId && merged.weeks.some((week) => week.id === remote.activeWeekId)
-      ? remote.activeWeekId
-      : merged.activeWeekId
-
-  return { ...merged, players, activeWeekId }
+  // Note: we intentionally keep this device's own active week. Every phone
+  // independently follows the live race (see the auto-follow effect), so we
+  // don't adopt a remote active week — that used to fight the live-race jump
+  // and could snap everyone onto a stale week.
+  return { ...merged, players }
 }
 
 // The slice of state we share across phones. currentUserId (per-device login)
@@ -740,6 +736,15 @@ function formatChatTime(value: string): string {
     return time
   }
   return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} · ${time}`
+}
+
+// Collapse a track name to a comparison key so the live feed's "Michigan Int'l
+// Speedway" matches the season schedule's "Michigan International Speedway".
+function normalizeTrackKey(track: string | undefined): string {
+  return (track ?? '')
+    .toLowerCase()
+    .replace(/int'?l|international/g, '')
+    .replace(/[^a-z0-9]/g, '')
 }
 
 function flagLabel(flagState: number) {
@@ -1247,42 +1252,40 @@ function App() {
     }
   }, [])
 
-  // Auto-follow the live race: NASCAR's feed tells us which race is actually on
-  // track right now (name, track, series), so we relabel that series' weekend
-  // week to match and jump to it the first time a new race appears. This is why
-  // the Garage no longer gets stuck on last week's race — it updates itself
-  // every weekend with zero hardcoding, and the draw uses the live field.
+  // Auto-follow the live race: NASCAR's feed tells us which race is on track
+  // right now, so we match it to the correct week ALREADY in the season schedule
+  // (by track + series) and jump to it the first time a new race appears. We
+  // never rename or overwrite another week — last week's race keeps its name and
+  // results; this week's race just becomes the active one.
   useEffect(() => {
-    if (!liveRace || !liveRace.raceName || liveRace.vehicles.length === 0 || !liveRace.liveSeriesId) {
+    if (!liveRace || liveRace.vehicles.length === 0 || !liveRace.liveSeriesId) {
       return
     }
-    const weekendId = weekendBySeries[String(liveRace.liveSeriesId)]?.id
-    if (!weekendId) {
+    const trackKey = normalizeTrackKey(liveRace.trackName)
+    if (!trackKey) {
       return
     }
-    const week = state.weeks.find((candidate) => candidate.id === weekendId)
-    if (!week) {
+    const match = state.weeks.find(
+      (week) => week.seriesId === liveRace.liveSeriesId && normalizeTrackKey(week.track) === trackKey,
+    )
+    if (!match) {
       return
     }
-    const nextName = liveRace.raceName
-    const nextTrack = liveRace.trackName ?? week.track
-    const metaChanged = week.race !== nextName || week.track !== nextTrack
-    const isNewRace = liveRace.raceId !== undefined && liveFollowRef.current !== liveRace.raceId
-    if (!metaChanged && !isNewRace) {
+    // Only jump once per race, and only if we aren't already there.
+    if (liveRace.raceId === undefined || liveFollowRef.current === liveRace.raceId) {
       return
     }
-    if (isNewRace) {
-      liveFollowRef.current = liveRace.raceId
+    liveFollowRef.current = liveRace.raceId
+    if (state.activeWeekId === match.id) {
+      return
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState((prev) => {
-      const weeks = prev.weeks.map((candidate) =>
-        candidate.id === weekendId ? { ...candidate, race: nextName, track: nextTrack } : candidate,
-      )
-      const next = { ...prev, weeks, activeWeekId: isNewRace ? weekendId : prev.activeWeekId }
+      const next = { ...prev, activeWeekId: match.id }
       saveState(next)
       return next
     })
-  }, [liveRace, state.weeks])
+  }, [liveRace, state.weeks, state.activeWeekId])
 
   // While any scanners are playing, poll each stream's audio level and mark the
   // drivers who are currently talking. Updates state only when the set changes
