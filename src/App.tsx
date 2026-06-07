@@ -1000,6 +1000,9 @@ function App() {
   const scannerPlayersRef = useRef<Map<string, ScannerPlayer>>(new Map())
   const audioCtxRef = useRef<AudioContext | null>(null)
   const liveFollowRef = useRef<number | undefined>(undefined)
+  // Always-current view of local messages + who's logged in, so the background
+  // chat sync can re-send unacknowledged messages without a stale closure.
+  const chatSyncRef = useRef<{ messages: ChatMessage[]; currentUserId?: string }>({ messages: [] })
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const backupInputRef = useRef<HTMLInputElement | null>(null)
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1185,12 +1188,17 @@ function App() {
     }
   }, [])
 
-  // Keep the shared league chat in sync while the Chat tab is open: pull the
-  // feed on open and every few seconds after, merging it into the local cache.
+  // Keep the background chat sync's view of local messages + identity fresh.
   useEffect(() => {
-    if (activeView !== 'chat') {
-      return undefined
-    }
+    chatSyncRef.current = { messages: state.messages, currentUserId: state.currentUserId }
+  }, [state.messages, state.currentUserId])
+
+  // Keep the shared league chat in sync in the BACKGROUND (not just while the
+  // Chat tab is open), so messages arrive everywhere and are already there when
+  // you open the tab. Also re-send any of MY messages the server hasn't
+  // acknowledged yet — inserts are idempotent (deduped by id), so retrying can't
+  // create duplicates. This is what makes a dropped send eventually land.
+  useEffect(() => {
     let active = true
 
     async function pullChat() {
@@ -1200,9 +1208,22 @@ function App() {
           return
         }
         const data = await response.json()
-        if (!active || !Array.isArray(data.messages) || data.messages.length === 0) {
+        if (!active || !Array.isArray(data.messages)) {
           return
         }
+        const serverIds = new Set<string>(data.messages.map((message: ChatMessage) => message.id))
+        const { messages: localMessages, currentUserId } = chatSyncRef.current
+        const unsent = localMessages.filter(
+          (message) => message.playerId === currentUserId && !serverIds.has(message.id),
+        )
+        for (const message of unsent) {
+          void fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(message),
+          }).catch(() => {})
+        }
+
         setState((prev) => {
           const merged = mergeMessages(prev.messages, data.messages)
           if (merged.length === prev.messages.length) {
@@ -1213,18 +1234,21 @@ function App() {
           return next
         })
       } catch {
-        // Offline or store not linked — stay on the local cache.
+        // Offline or store unreachable — stay on the local cache and retry next tick.
       }
     }
 
     pullChat()
-    const timer = window.setInterval(pullChat, 4000)
+    const timer = window.setInterval(pullChat, 5000)
+    const onFocus = () => pullChat()
+    window.addEventListener('focus', onFocus)
 
     return () => {
       active = false
       window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
     }
-  }, [activeView])
+  }, [])
 
   // Keep the shared league state (draws, players, results) in sync across every
   // phone: pull the shared blob on load, on focus, and on a steady interval,
