@@ -139,6 +139,10 @@ type ScannerPlayer = {
   hls?: Hls
   analyser?: AnalyserNode
   data?: Uint8Array<ArrayBuffer>
+  // Timestamp of the last moment this stream was loud enough to count as
+  // "talking" — used to hold the highlight briefly so it doesn't flicker
+  // between words.
+  lastLoud?: number
 }
 
 type BeforeInstallPromptEvent = Event & {
@@ -1354,21 +1358,26 @@ function App() {
       return undefined
     }
     let frame = 0
+    const HOLD_MS = 700 // keep the highlight on briefly between words
+    const LOUD_RMS = 6 // ~5% amplitude — above scanner hiss, below voice
     const tick = () => {
+      const now = performance.now()
       const talking: string[] = []
       for (const [number, player] of scannerPlayersRef.current.entries()) {
         if (player.analyser && player.data) {
           player.analyser.getByteTimeDomainData(player.data)
-          let peak = 0
+          let sumSquares = 0
           for (let i = 0; i < player.data.length; i += 1) {
-            const deviation = Math.abs(player.data[i] - 128)
-            if (deviation > peak) {
-              peak = deviation
-            }
+            const deviation = player.data[i] - 128
+            sumSquares += deviation * deviation
           }
-          if (peak > 9) {
-            talking.push(number)
+          const rms = Math.sqrt(sumSquares / player.data.length)
+          if (rms > LOUD_RMS) {
+            player.lastLoud = now
           }
+        }
+        if (player.lastLoud && now - player.lastLoud < HOLD_MS) {
+          talking.push(number)
         }
       }
       setSpeakingNumbers((current) => {
@@ -1821,6 +1830,10 @@ function App() {
     audio.crossOrigin = 'anonymous'
     audio.preload = 'none'
     audio.setAttribute('playsinline', '')
+    // iOS is far more reliable at playing + exposing audio to Web Audio when the
+    // element is actually in the document, so keep a hidden one attached.
+    audio.style.display = 'none'
+    document.body.appendChild(audio)
     const player: ScannerPlayer = { audio }
     scannerPlayersRef.current.set(channel.driverNumber, player)
     setActiveScanners((current) => (current.includes(channel.driverNumber) ? current : [...current, channel.driverNumber]))
@@ -1833,7 +1846,8 @@ function App() {
       try {
         const source = ctx.createMediaElementSource(audio)
         const analyser = ctx.createAnalyser()
-        analyser.fftSize = 256
+        analyser.fftSize = 512
+        analyser.smoothingTimeConstant = 0.4
         source.connect(analyser)
         analyser.connect(ctx.destination)
         player.analyser = analyser
@@ -1884,6 +1898,7 @@ function App() {
     player.audio.removeAttribute('src')
     try {
       player.audio.load()
+      player.audio.remove()
     } catch {
       // ignore teardown races
     }
@@ -2561,8 +2576,20 @@ function App() {
               )}
             </div>
 
+            {talkingChannels.length > 0 && (
+              <div className="now-talking" aria-live="polite">
+                <Volume2 size={18} />
+                <div>
+                  <span>On the radio now</span>
+                  <strong>
+                    {talkingChannels.map((channel) => `#${channel.driverNumber} ${channel.driverName}`).join(', ')}
+                  </strong>
+                </div>
+              </div>
+            )}
+
             <p className="scanner-hint">
-              Tap drivers below to build your own mix — listen to several at once and the one talking lights up.
+              Tap drivers below to build your own mix — listen to several at once and whoever's talking lights up teal and shows here.
               {allScanChannel ? ' “All Scan” is NASCAR’s single combined feed, so it can’t show who’s speaking.' : ''}
             </p>
 

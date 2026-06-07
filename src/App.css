@@ -1096,6 +1096,36 @@ h3 {
   line-height: 1.35;
 }
 
+/* Big, obvious "who's talking right now" banner above the driver grid. */
+.now-talking {
+  margin: 10px 0 4px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.7);
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.22), rgba(7, 11, 13, 0.5));
+  color: #2dd4bf;
+  animation: scanner-talk 1s ease-in-out infinite;
+}
+
+.now-talking span {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #5eead4;
+  font-weight: 800;
+}
+
+.now-talking strong {
+  display: block;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .scanner-grid span {
   font-size: 0.74rem;
   font-weight: 1000;
