@@ -1471,6 +1471,26 @@ h3 {
   gap: 10px;
 }
 
+.republish-btn {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(45, 212, 191, 0.5);
+  border-radius: 8px;
+  background: rgba(45, 212, 191, 0.14);
+  color: #5eead4;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.republish-btn:active {
+  transform: scale(0.99);
+}
+
 .admin-neighbor-form {
   display: grid;
   gap: 10px;

@@ -81,10 +81,23 @@ function unionIds(a = [], b = []) {
   return Array.from(new Set([...(a ?? []), ...(b ?? [])]))
 }
 
-// Merge is strictly additive for draws: for any week we keep whichever side has
-// MORE picks, so a sync can never wipe a lineup someone already drew. paidBy is
-// unioned and results fill in when missing, mirroring the client's own
-// mergeSavedStates so both sides agree.
+// Never replace a real draw with an empty one; otherwise the NEWER lineup wins
+// (by drawnAt), a timestamped re-draw beats a legacy un-timestamped one, and
+// richer pick count is the last-resort tiebreak. Mirrors the client's
+// preferIncomingDraw so both sides agree and a re-draw can propagate.
+function preferIncomingDraw(existing, incoming) {
+  const existingPicks = weekPickCount(existing)
+  const incomingPicks = weekPickCount(incoming)
+  if (incomingPicks === 0) return false
+  if (existingPicks === 0) return true
+  if (incoming.drawnAt && existing.drawnAt) return incoming.drawnAt > existing.drawnAt
+  if (incoming.drawnAt && !existing.drawnAt) return true
+  if (!incoming.drawnAt && existing.drawnAt) return false
+  return incomingPicks > existingPicks
+}
+
+// Race results (winner/second) are always kept additively; the lineup follows
+// preferIncomingDraw. participantIds and paidBy are unioned.
 function mergeWeeks(baseWeeks = [], incomingWeeks = []) {
   const byId = new Map()
   for (const week of baseWeeks) {
@@ -96,11 +109,12 @@ function mergeWeeks(baseWeeks = [], incomingWeeks = []) {
       byId.set(week.id, week)
       continue
     }
-    const richer = weekPickCount(week) > weekPickCount(existing)
+    const takeIncoming = preferIncomingDraw(existing, week)
     byId.set(week.id, {
       ...existing,
-      assignments: richer ? week.assignments : existing.assignments,
-      communityTeams: richer ? week.communityTeams : existing.communityTeams ?? week.communityTeams,
+      assignments: takeIncoming ? week.assignments : existing.assignments,
+      communityTeams: takeIncoming ? week.communityTeams : existing.communityTeams ?? week.communityTeams,
+      drawnAt: takeIncoming ? week.drawnAt ?? existing.drawnAt : existing.drawnAt ?? week.drawnAt,
       participantIds: unionIds(existing.participantIds, week.participantIds),
       paidBy: unionIds(existing.paidBy, week.paidBy),
       winnerId: existing.winnerId ?? week.winnerId,

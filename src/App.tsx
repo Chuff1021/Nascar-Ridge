@@ -63,6 +63,10 @@ type Week = {
   paidBy: string[]
   assignments: Record<string, Driver[]>
   communityTeams?: CommunityTeam[]
+  // When this week's lineup was last drawn/published. Lets a fresh re-draw win
+  // a sync over an equal-size older draw instead of being held back by the
+  // "keep the richest lineup" rule.
+  drawnAt?: string
   winnerId?: string
   secondId?: string
   // Auto-recorded from the live finish: the car that won and the owner(s) who
@@ -353,9 +357,34 @@ function collectSavedStates(): AppState[] {
   return states
 }
 
-// Merge snapshots so no race's lineup is ever lost: the first (highest-priority)
-// snapshot wins for metadata/order, but for any week we keep whichever snapshot
-// has the most picks. This only ever ADDS draws back, it never removes them.
+// Decide whether an incoming week's lineup should replace the one we already
+// have. Never replace a real draw with an empty one; otherwise the NEWER draw
+// wins (by drawnAt), a timestamped re-draw beats a legacy un-timestamped one,
+// and as a last resort the richer pick count wins. This is what lets a fresh
+// re-draw propagate instead of being stuck behind an equal-size older draw.
+function preferIncomingDraw(existing: Week, incoming: Week): boolean {
+  const existingPicks = weekPickCount(existing)
+  const incomingPicks = weekPickCount(incoming)
+  if (incomingPicks === 0) {
+    return false
+  }
+  if (existingPicks === 0) {
+    return true
+  }
+  if (incoming.drawnAt && existing.drawnAt) {
+    return incoming.drawnAt > existing.drawnAt
+  }
+  if (incoming.drawnAt && !existing.drawnAt) {
+    return true
+  }
+  if (!incoming.drawnAt && existing.drawnAt) {
+    return false
+  }
+  return incomingPicks > existingPicks
+}
+
+// Merge snapshots so no race's result is ever lost. Race results (winner/second)
+// are always kept additively; the lineup follows preferIncomingDraw.
 function mergeSavedStates(states: AppState[]): AppState {
   const base = states[0]
   const byId = new Map<string, Week>()
@@ -368,19 +397,25 @@ function mergeSavedStates(states: AppState[]): AppState {
         byId.set(week.id, week)
         return
       }
-      if (weekPickCount(week) > weekPickCount(existing)) {
+      const winnerFields = {
+        winnerId: existing.winnerId ?? week.winnerId,
+        secondId: existing.secondId ?? week.secondId,
+        winningDriverNumber: existing.winningDriverNumber ?? week.winningDriverNumber,
+        winnerTeamIds: existing.winnerTeamIds ?? week.winnerTeamIds,
+        secondDriverNumber: existing.secondDriverNumber ?? week.secondDriverNumber,
+        secondTeamIds: existing.secondTeamIds ?? week.secondTeamIds,
+      }
+      if (preferIncomingDraw(existing, week)) {
         byId.set(week.id, {
           ...existing,
           assignments: week.assignments,
           communityTeams: week.communityTeams ?? existing.communityTeams,
+          drawnAt: week.drawnAt ?? existing.drawnAt,
           paidBy: existing.paidBy?.length ? existing.paidBy : week.paidBy,
-          winnerId: existing.winnerId ?? week.winnerId,
-          secondId: existing.secondId ?? week.secondId,
-          winningDriverNumber: existing.winningDriverNumber ?? week.winningDriverNumber,
-          winnerTeamIds: existing.winnerTeamIds ?? week.winnerTeamIds,
-          secondDriverNumber: existing.secondDriverNumber ?? week.secondDriverNumber,
-          secondTeamIds: existing.secondTeamIds ?? week.secondTeamIds,
+          ...winnerFields,
         })
+      } else {
+        byId.set(week.id, { ...existing, ...winnerFields })
       }
     })
   })
@@ -1497,6 +1532,7 @@ function App() {
         ...week,
         assignments,
         communityTeams,
+        drawnAt: new Date().toISOString(),
         winnerId: undefined,
         secondId: undefined,
         winningDriverNumber: undefined,
@@ -1505,6 +1541,14 @@ function App() {
         secondTeamIds: undefined,
       }
     })
+  }
+
+  // Force the active week's current lineup out to every phone without re-rolling
+  // it: stamp a fresh drawnAt so the sync treats it as the newest draw and
+  // replaces an equal-size older one that the "keep the richest" rule would
+  // otherwise hold onto.
+  function republishDraw() {
+    updateWeek(activeWeek.id, (week) => ({ ...week, drawnAt: new Date().toISOString() }))
   }
 
   // When the race goes final, lock in the pot result from the running order:
@@ -2816,6 +2860,13 @@ function App() {
                 Draw
               </button>
             </div>
+
+            {hasDraw(activeWeek) && (
+              <button type="button" className="republish-btn" onClick={republishDraw}>
+                <Upload size={16} />
+                Publish this lineup to everyone
+              </button>
+            )}
 
             <div>
               <div className="mini-title">
