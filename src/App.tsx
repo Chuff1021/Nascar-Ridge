@@ -113,6 +113,9 @@ type LiveRace = {
   lapsToGo: number
   flagState: number
   raceId?: number
+  raceName?: string
+  trackName?: string
+  liveSeriesId?: SeriesId
   vehicles: LiveVehicle[]
   updatedAt: string
 }
@@ -760,6 +763,9 @@ function normalizeLiveRace(data: unknown): LiveRace {
     laps_to_go?: number
     flag_state?: number
     race_id?: number
+    run_name?: string
+    track_name?: string
+    series_id?: number
     vehicles?: Array<{
       running_position?: number
       vehicle_number?: string
@@ -772,12 +778,16 @@ function normalizeLiveRace(data: unknown): LiveRace {
     }>
   }
 
+  const seriesId = feed.series_id
   return {
     lapNumber: feed.lap_number ?? 0,
     lapsInRace: feed.laps_in_race ?? 0,
     lapsToGo: feed.laps_to_go ?? 0,
     flagState: feed.flag_state ?? 9,
     raceId: feed.race_id,
+    raceName: feed.run_name?.trim() || undefined,
+    trackName: feed.track_name?.trim() || undefined,
+    liveSeriesId: seriesId === 1 || seriesId === 2 || seriesId === 3 ? seriesId : undefined,
     updatedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     vehicles: (feed.vehicles ?? [])
       .map((vehicle, index) => ({
@@ -949,6 +959,7 @@ function App() {
   // play at once and we can tell who's actually talking.
   const scannerPlayersRef = useRef<Map<string, ScannerPlayer>>(new Map())
   const audioCtxRef = useRef<AudioContext | null>(null)
+  const liveFollowRef = useRef<number | undefined>(undefined)
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null)
   const backupInputRef = useRef<HTMLInputElement | null>(null)
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1235,6 +1246,43 @@ function App() {
       window.removeEventListener('focus', onFocus)
     }
   }, [])
+
+  // Auto-follow the live race: NASCAR's feed tells us which race is actually on
+  // track right now (name, track, series), so we relabel that series' weekend
+  // week to match and jump to it the first time a new race appears. This is why
+  // the Garage no longer gets stuck on last week's race — it updates itself
+  // every weekend with zero hardcoding, and the draw uses the live field.
+  useEffect(() => {
+    if (!liveRace || !liveRace.raceName || liveRace.vehicles.length === 0 || !liveRace.liveSeriesId) {
+      return
+    }
+    const weekendId = weekendBySeries[String(liveRace.liveSeriesId)]?.id
+    if (!weekendId) {
+      return
+    }
+    const week = state.weeks.find((candidate) => candidate.id === weekendId)
+    if (!week) {
+      return
+    }
+    const nextName = liveRace.raceName
+    const nextTrack = liveRace.trackName ?? week.track
+    const metaChanged = week.race !== nextName || week.track !== nextTrack
+    const isNewRace = liveRace.raceId !== undefined && liveFollowRef.current !== liveRace.raceId
+    if (!metaChanged && !isNewRace) {
+      return
+    }
+    if (isNewRace) {
+      liveFollowRef.current = liveRace.raceId
+    }
+    setState((prev) => {
+      const weeks = prev.weeks.map((candidate) =>
+        candidate.id === weekendId ? { ...candidate, race: nextName, track: nextTrack } : candidate,
+      )
+      const next = { ...prev, weeks, activeWeekId: isNewRace ? weekendId : prev.activeWeekId }
+      saveState(next)
+      return next
+    })
+  }, [liveRace, state.weeks])
 
   // While any scanners are playing, poll each stream's audio level and mark the
   // drivers who are currently talking. Updates state only when the set changes
@@ -1975,6 +2023,9 @@ function App() {
               const race = weekendBySeries[String(seriesId)]
               const meta = seriesMeta[seriesId]
               const isActive = activeWeek.id === race?.id
+              // Prefer the week's live-updated name so the button shows the race
+              // that's actually running, not the hardcoded default.
+              const liveName = state.weeks.find((week) => week.id === race?.id)?.race ?? race?.race
 
               return (
                 <button
@@ -1985,7 +2036,7 @@ function App() {
                 >
                   <span>{meta.day}</span>
                   <strong>{meta.short}</strong>
-                  <small>{race?.race}</small>
+                  <small>{liveName}</small>
                 </button>
               )
             })}
@@ -2745,7 +2796,16 @@ function App() {
                 <p className="eyebrow">Random draw</p>
                 <h3>{drawComplete ? 'Teams are posted' : 'Ready to draw teams'}</h3>
                 <span>
-                  {(rostersBySeries[activeWeek.seriesId] ?? drivers).length} {seriesMeta[activeWeek.seriesId].short} drivers
+                  {(() => {
+                    const liveField = fieldFromLiveRace(liveRace)
+                    const pool = liveField.length >= 15 ? liveField : rostersBySeries[activeWeek.seriesId] ?? drivers
+                    const n = activeWeek.participantIds.length
+                    const each = n > 0 ? Math.floor(pool.length / n) : 0
+                    const leftover = n > 0 ? pool.length - each * n : 0
+                    return `${pool.length} cars${liveField.length >= 15 ? ' (live field)' : ''} · ${n} players → ${each} each${
+                      leftover > 0 ? ` + ${leftover} shared` : ''
+                    }`
+                  })()}
                 </span>
               </div>
               <button type="button" onClick={drawWeek}>
