@@ -96,9 +96,10 @@ function preferIncomingDraw(existing, incoming) {
   return incomingPicks > existingPicks
 }
 
-// Race results (winner/second) are always kept additively; the lineup follows
-// preferIncomingDraw. participantIds and paidBy are unioned.
-function mergeWeeks(baseWeeks = [], incomingWeeks = []) {
+// Race results (winner/second) are always kept additively. Normal sync follows
+// preferIncomingDraw; an explicit forceWeekId is the commissioner's "publish
+// this exact lineup" path and replaces that week's draw/participants outright.
+function mergeWeeks(baseWeeks = [], incomingWeeks = [], forceWeekId) {
   const byId = new Map()
   for (const week of baseWeeks) {
     byId.set(week.id, week)
@@ -109,14 +110,19 @@ function mergeWeeks(baseWeeks = [], incomingWeeks = []) {
       byId.set(week.id, week)
       continue
     }
-    const takeIncoming = preferIncomingDraw(existing, week)
+    const forceIncoming = forceWeekId === week.id && weekPickCount(week) > 0
+    const takeIncoming = forceIncoming || preferIncomingDraw(existing, week)
     byId.set(week.id, {
       ...existing,
+      race: forceIncoming ? week.race ?? existing.race : existing.race,
+      track: forceIncoming ? week.track ?? existing.track : existing.track,
+      date: forceIncoming ? week.date ?? existing.date : existing.date,
+      seriesId: forceIncoming ? week.seriesId ?? existing.seriesId : existing.seriesId,
       assignments: takeIncoming ? week.assignments : existing.assignments,
       communityTeams: takeIncoming ? week.communityTeams : existing.communityTeams ?? week.communityTeams,
       drawnAt: takeIncoming ? week.drawnAt ?? existing.drawnAt : existing.drawnAt ?? week.drawnAt,
-      participantIds: unionIds(existing.participantIds, week.participantIds),
-      paidBy: unionIds(existing.paidBy, week.paidBy),
+      participantIds: forceIncoming ? week.participantIds ?? [] : unionIds(existing.participantIds, week.participantIds),
+      paidBy: forceIncoming ? week.paidBy ?? [] : unionIds(existing.paidBy, week.paidBy),
       winnerId: existing.winnerId ?? week.winnerId,
       secondId: existing.secondId ?? week.secondId,
       winningDriverNumber: existing.winningDriverNumber ?? week.winningDriverNumber,
@@ -154,12 +160,13 @@ export default async function handler(request, response) {
     if (request.method === 'POST') {
       const incomingRaw = typeof request.body === 'string' ? JSON.parse(request.body) : request.body
       const incoming = sanitize(incomingRaw)
+      const forceWeekId = typeof incomingRaw?.forceWeekId === 'string' ? incomingRaw.forceWeekId : undefined
 
       const stored = await readShared()
       const merged = stored
         ? {
             players: mergePlayers(stored.players, incoming.players),
-            weeks: mergeWeeks(stored.weeks, incoming.weeks),
+            weeks: mergeWeeks(stored.weeks, incoming.weeks, forceWeekId),
             activeWeekId: incoming.activeWeekId ?? stored.activeWeekId,
           }
         : incoming

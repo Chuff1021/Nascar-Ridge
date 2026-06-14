@@ -1518,11 +1518,47 @@ function App() {
   }
 
   // Force the active week's current lineup out to every phone without re-rolling
-  // it: stamp a fresh drawnAt so the sync treats it as the newest draw and
-  // replaces an equal-size older one that the "keep the richest" rule would
-  // otherwise hold onto.
-  function republishDraw() {
-    updateWeek(activeWeek.id, (week) => ({ ...week, drawnAt: new Date().toISOString() }))
+  // it. This bypasses the normal "newer/richer merge" path and tells the server
+  // that the commissioner's active week is the official one.
+  async function republishDraw() {
+    if (!hasDraw(activeWeek)) {
+      return
+    }
+    if (pushTimerRef.current) {
+      window.clearTimeout(pushTimerRef.current)
+      pushTimerRef.current = null
+    }
+
+    const next: AppState = {
+      ...state,
+      weeks: state.weeks.map((week) =>
+        week.id === activeWeek.id ? { ...week, drawnAt: new Date().toISOString() } : week,
+      ),
+    }
+    setState(next)
+    saveState(next)
+
+    try {
+      const response = await fetch('/api/state', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...toSharedState(next), forceWeekId: activeWeek.id }),
+      })
+      if (!response.ok) {
+        return
+      }
+      const data = await response.json()
+      if (!data?.configured || !data.state || !Array.isArray(data.state.weeks)) {
+        return
+      }
+      setState((prev) => {
+        const merged = mergeSharedState(prev, data.state as SharedState)
+        saveState(merged)
+        return merged
+      })
+    } catch {
+      // Local copy is saved. The next successful publish/sync can still push it.
+    }
   }
 
   // When the race goes final, lock in the pot result from the running order:
