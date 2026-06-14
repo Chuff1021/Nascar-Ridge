@@ -199,7 +199,6 @@ const drivers: Driver[] = [
   { number: '5', name: 'Kyle Larson', team: 'Hendrick Motorsports' },
   { number: '6', name: 'Brad Keselowski', team: 'RFK Racing' },
   { number: '7', name: 'Daniel Suarez', team: 'Spire Motorsports' },
-  { number: '8', name: 'Kyle Busch', team: 'Richard Childress Racing' },
   { number: '9', name: 'Chase Elliott', team: 'Hendrick Motorsports' },
   { number: '10', name: 'Ty Dillon', team: 'Kaulig Racing' },
   { number: '11', name: 'Denny Hamlin', team: 'Joe Gibbs Racing' },
