@@ -33,14 +33,7 @@ function ensureSchema() {
 }
 
 // Read the current shared state from whichever backend is active.
-async function readShared() {
-  if (sql) {
-    await ensureSchema()
-    const rows = await sql`SELECT data FROM league_state WHERE id = ${STATE_ID}`
-    const data = rows[0]?.data
-    return isStateShape(data) ? data : null
-  }
-
+async function readBlobShared() {
   const res = await fetch(STATE_BLOB, { headers: { accept: 'application/json' } })
   if (!res.ok) {
     return null
@@ -49,16 +42,25 @@ async function readShared() {
   return isStateShape(parsed) ? parsed : null
 }
 
-// Write the merged shared state back to whichever backend is active.
-async function writeShared(state) {
+async function readShared() {
   if (sql) {
-    await ensureSchema()
-    await sql`INSERT INTO league_state (id, data, updated_at)
-      VALUES (${STATE_ID}, ${JSON.stringify(state)}::jsonb, now())
-      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`
-    return
+    try {
+      await ensureSchema()
+      const rows = await sql`SELECT data FROM league_state WHERE id = ${STATE_ID}`
+      const data = rows[0]?.data
+      if (isStateShape(data)) {
+        return data
+      }
+    } catch (error) {
+      console.error('Neon state read failed; falling back to jsonblob', error)
+    }
   }
 
+  return readBlobShared()
+}
+
+// Write the merged shared state back to whichever backend is active.
+async function writeBlobShared(state) {
   const res = await fetch(STATE_BLOB, {
     method: 'PUT',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -67,6 +69,23 @@ async function writeShared(state) {
   if (!res.ok) {
     throw new Error(`jsonblob returned ${res.status}`)
   }
+  return 'jsonblob'
+}
+
+async function writeShared(state) {
+  if (sql) {
+    try {
+      await ensureSchema()
+      await sql`INSERT INTO league_state (id, data, updated_at)
+        VALUES (${STATE_ID}, ${JSON.stringify(state)}::jsonb, now())
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`
+      return 'neon'
+    } catch (error) {
+      console.error('Neon state write failed; falling back to jsonblob', error)
+    }
+  }
+
+  return writeBlobShared(state)
 }
 
 function weekPickCount(week) {
@@ -171,9 +190,9 @@ export default async function handler(request, response) {
           }
         : incoming
 
-      await writeShared(merged)
+      const backend = await writeShared(merged)
       response.setHeader('Cache-Control', 'no-store')
-      response.status(200).json({ state: merged, configured: true })
+      response.status(200).json({ state: merged, configured: true, backend })
       return
     }
 

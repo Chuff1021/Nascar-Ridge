@@ -47,10 +47,16 @@ function ensureSchema() {
 
 async function readMessages() {
   if (sql) {
-    await ensureSchema()
-    const rows = await sql`SELECT id, player_id, body, sent_at FROM chat_messages
-      ORDER BY sent_at ASC LIMIT ${MAX_MESSAGES}`
-    return rows.map((row) => ({ id: row.id, playerId: row.player_id, body: row.body, sentAt: row.sent_at }))
+    try {
+      await ensureSchema()
+      const rows = await sql`SELECT id, player_id, body, sent_at FROM chat_messages
+        ORDER BY sent_at ASC LIMIT ${MAX_MESSAGES}`
+      if (rows.length > 0) {
+        return rows.map((row) => ({ id: row.id, playerId: row.player_id, body: row.body, sentAt: row.sent_at }))
+      }
+    } catch (error) {
+      console.error('Neon chat read failed; falling back to jsonblob', error)
+    }
   }
   const res = await fetch(CHAT_BLOB, { headers: { accept: 'application/json' } })
   if (!res.ok) {
@@ -62,12 +68,16 @@ async function readMessages() {
 
 async function appendMessage(message) {
   if (sql) {
-    await ensureSchema()
-    // One row per message — atomic, no read-modify-write race.
-    await sql`INSERT INTO chat_messages (id, player_id, body, sent_at)
-      VALUES (${message.id}, ${message.playerId}, ${message.body}, ${message.sentAt})
-      ON CONFLICT (id) DO NOTHING`
-    return readMessages()
+    try {
+      await ensureSchema()
+      // One row per message — atomic, no read-modify-write race.
+      await sql`INSERT INTO chat_messages (id, player_id, body, sent_at)
+        VALUES (${message.id}, ${message.playerId}, ${message.body}, ${message.sentAt})
+        ON CONFLICT (id) DO NOTHING`
+      return readMessages()
+    } catch (error) {
+      console.error('Neon chat write failed; falling back to jsonblob', error)
+    }
   }
   const existing = await readMessages()
   const merged = mergeMessages(existing, [message])
