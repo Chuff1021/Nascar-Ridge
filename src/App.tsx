@@ -198,9 +198,10 @@ const drivers: Driver[] = [
   { number: '4', name: 'Noah Gragson', team: 'Front Row Motorsports' },
   { number: '5', name: 'Kyle Larson', team: 'Hendrick Motorsports' },
   { number: '6', name: 'Brad Keselowski', team: 'RFK Racing' },
-  { number: '7', name: 'Daniel Suarez', team: 'Trackhouse Racing' },
+  { number: '7', name: 'Daniel Suarez', team: 'Spire Motorsports' },
   { number: '8', name: 'Kyle Busch', team: 'Richard Childress Racing' },
   { number: '9', name: 'Chase Elliott', team: 'Hendrick Motorsports' },
+  { number: '10', name: 'Ty Dillon', team: 'Kaulig Racing' },
   { number: '11', name: 'Denny Hamlin', team: 'Joe Gibbs Racing' },
   { number: '12', name: 'Ryan Blaney', team: 'Team Penske' },
   { number: '16', name: 'AJ Allmendinger', team: 'Kaulig Racing' },
@@ -214,6 +215,7 @@ const drivers: Driver[] = [
   { number: '34', name: 'Todd Gilliland', team: 'Front Row Motorsports' },
   { number: '35', name: 'Riley Herbst', team: '23XI Racing' },
   { number: '38', name: 'Zane Smith', team: 'Front Row Motorsports' },
+  { number: '41', name: 'Cole Custer', team: 'Haas Factory Team' },
   { number: '42', name: 'John Hunter Nemechek', team: 'Legacy Motor Club' },
   { number: '43', name: 'Erik Jones', team: 'Legacy Motor Club' },
   { number: '45', name: 'Tyler Reddick', team: '23XI Racing' },
@@ -224,17 +226,17 @@ const drivers: Driver[] = [
   { number: '60', name: 'Ryan Preece', team: 'RFK Racing' },
   { number: '71', name: 'Michael McDowell', team: 'Spire Motorsports' },
   { number: '77', name: 'Carson Hocevar', team: 'Spire Motorsports' },
+  { number: '78', name: 'Daniel Dye', team: 'Live Fast Motorsports' },
   { number: '88', name: 'Connor Zilisch', team: 'Trackhouse Racing' },
   { number: '97', name: 'Shane van Gisbergen', team: 'Trackhouse Racing' },
-  { number: '99', name: 'Corey Heim', team: '23XI Racing' },
 ]
 
 const allPlayerIds = players.map((player) => player.id)
 
 const remainingCupSchedule = [
-  { id: 'w5', race: 'Nashville', track: 'Nashville Superspeedway', date: 'May 31' },
-  { id: 'w6', race: 'Michigan', track: 'Michigan International Speedway', date: 'Jun 7' },
-  { id: 'w7', race: 'Pocono', track: 'Pocono Raceway', date: 'Jun 14' },
+  { id: 'w5', race: 'Cracker Barrel 400', track: 'Nashville Superspeedway', date: 'May 31' },
+  { id: 'w6', race: 'FireKeepers Casino 400', track: 'Michigan International Speedway', date: 'Jun 7' },
+  { id: 'w7', race: 'The Great American Getaway 400', track: 'Pocono Raceway', date: 'Jun 14' },
   { id: 'w8', race: 'San Diego', track: 'Naval Base Coronado', date: 'Jun 21' },
   { id: 'w9', race: 'Sonoma', track: 'Sonoma Raceway', date: 'Jun 28' },
   { id: 'w10', race: 'Chicagoland', track: 'Chicagoland Speedway', date: 'Jul 5' },
@@ -265,28 +267,22 @@ const seriesMeta: Record<SeriesId, { short: string; name: string; day: string }>
   1: { short: 'Cup', name: 'Cup Series', day: 'Sunday' },
 }
 
-const seriesOrder: SeriesId[] = [3, 2, 1]
+const currentCupWeekId = 'w7'
 
-// This weekend's three races at Nashville (Trucks Fri / Xfinity Sat / Cup Sun).
-// The Cup race reuses the existing 'w5' week so its history/results carry over.
+// Sunday Cup only. Truck/Xfinity choices are intentionally hidden from the
+// active race workflow so the draw cannot land on the wrong series.
 const raceWeekend: Array<{ seriesId: SeriesId; id: string; race: string; track: string; date: string }> = [
-  { seriesId: 3, id: 'truck-nashville-2026', race: 'Allegiance 200', track: 'Nashville Superspeedway', date: 'May 29' },
-  { seriesId: 2, id: 'xfinity-nashville-2026', race: 'Sports Illustrated Resorts 250', track: 'Nashville Superspeedway', date: 'May 30' },
-  { seriesId: 1, id: 'w5', race: 'Cracker Barrel 400', track: 'Nashville Superspeedway', date: 'May 31' },
+  { seriesId: 1, id: currentCupWeekId, race: 'The Great American Getaway 400', track: 'Pocono Raceway', date: 'Jun 14' },
 ]
 
-const weekendBySeries = entriesToObject(raceWeekend.map((race) => [String(race.seriesId), race]))
-
 const starterState: AppState = {
-  activeWeekId: 'truck-nashville-2026',
+  activeWeekId: currentCupWeekId,
   players,
   weeks: [
     createOpenWeek('w1', 'Daytona 500', 'Daytona International Speedway', 'Feb 15'),
     createOpenWeek('w2', 'Pennzoil 400', 'Las Vegas Motor Speedway', 'Mar 2'),
     createOpenWeek('w3', 'Food City 500', 'Bristol Motor Speedway', 'Apr 12'),
     createOpenWeek('w4', 'Coca-Cola 600', 'Charlotte Motor Speedway', 'May 24'),
-    createOpenWeek('truck-nashville-2026', 'Allegiance 200', 'Nashville Superspeedway', 'May 29', 3),
-    createOpenWeek('xfinity-nashville-2026', 'Sports Illustrated Resorts 250', 'Nashville Superspeedway', 'May 30', 2),
     ...remainingCupSchedule.map((race) =>
       race.id === 'w5'
         ? createOpenWeek('w5', 'Cracker Barrel 400', 'Nashville Superspeedway', 'May 31', 1)
@@ -524,8 +520,8 @@ function normalizeSavedState(saved: AppState): AppState {
     addedWeekendRace = true
   })
 
-  if (addedWeekendRace) {
-    activeWeekId = 'truck-nashville-2026'
+  if (addedWeekendRace || activeWeekId !== currentCupWeekId) {
+    activeWeekId = currentCupWeekId
   }
 
   return {
@@ -644,6 +640,20 @@ function fieldFromLiveRace(liveRace: LiveRace | undefined): Driver[] {
     field.push({ number, name, team: vehicle.manufacturer ?? '' })
   }
   return field
+}
+
+function drawPoolForWeek(week: Week, liveRace: LiveRace | undefined): { pool: Driver[]; source: string } {
+  const liveField = fieldFromLiveRace(liveRace)
+  const liveMatchesWeek =
+    liveRace?.liveSeriesId === week.seriesId &&
+    Boolean(liveRace.trackName) &&
+    normalizeTrackKey(liveRace.trackName) === normalizeTrackKey(week.track)
+
+  if (liveMatchesWeek && liveField.length >= 15) {
+    return { pool: liveField, source: 'live Cup field' }
+  }
+
+  return { pool: drivers, source: 'verified Cup entry list' }
 }
 
 // Split N players into `teamCount` teams as evenly as possible: the first few
@@ -877,29 +887,6 @@ function normalizeAudioChannels(data: unknown): AudioChannel[] {
     .filter((channel) => channel.driverNumber && channel.url)
 }
 
-function rosterFromMapping(data: unknown): Driver[] {
-  const mapping = data as {
-    audio_config?: Array<{ driver_number?: string; driver_name?: string }>
-  }
-
-  const seen = new Set<string>()
-  const roster: Driver[] = []
-
-  for (const channel of mapping.audio_config ?? []) {
-    const number = (channel.driver_number ?? '').trim()
-    const name = (channel.driver_name ?? '').replace(/\s*\(i\)\s*$/i, '').trim()
-
-    if (!number || number === 'All Scan' || !name || seen.has(number)) {
-      continue
-    }
-
-    seen.add(number)
-    roster.push({ number, name, team: '' })
-  }
-
-  return roster
-}
-
 function getLiveVehicle(liveRace: LiveRace | undefined, driver: Driver) {
   return liveRace?.vehicles.find((vehicle) => vehicle.vehicleNumber === driver.number)
 }
@@ -1035,7 +1022,6 @@ function App() {
   const [canInstall, setCanInstall] = useState(false)
   const [isRefreshingLive, setIsRefreshingLive] = useState(false)
   const [showInstallHelp, setShowInstallHelp] = useState(false)
-  const [rostersBySeries, setRostersBySeries] = useState<Record<number, Driver[]>>({ 1: drivers })
   const [driverIdByName, setDriverIdByName] = useState<Record<string, number>>({})
 
   // On first load, write the (possibly recovered/merged) state straight back so
@@ -1408,48 +1394,6 @@ function App() {
   useEffect(() => {
     let active = true
 
-    async function loadRosters() {
-      const results = await Promise.all(
-        seriesOrder.map(async (seriesId) => {
-          try {
-            const response = await fetch(`/api/audio-mapping?series=${seriesId}`, { cache: 'no-store' })
-            if (!response.ok) {
-              return [seriesId, undefined] as const
-            }
-
-            const roster = rosterFromMapping(await response.json())
-            return [seriesId, roster.length > 0 ? roster : undefined] as const
-          } catch {
-            return [seriesId, undefined] as const
-          }
-        }),
-      )
-
-      if (!active) {
-        return
-      }
-
-      setRostersBySeries((current) => {
-        const next = { ...current }
-        for (const [seriesId, roster] of results) {
-          if (roster) {
-            next[seriesId] = roster
-          }
-        }
-        return next
-      })
-    }
-
-    loadRosters()
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let active = true
-
     async function loadDriverIds() {
       try {
         const response = await fetch('/api/drivers', { cache: 'no-store' })
@@ -1554,11 +1498,9 @@ function App() {
 
   function drawWeek() {
     updateWeek(activeWeek.id, (week) => {
-      // Prefer the live entry list (the real field of cars) when this week's
-      // race is actually on track; fall back to the cached series roster
-      // otherwise. The live field never contains officials/scanner channels.
-      const liveField = fieldFromLiveRace(liveRace)
-      const pool = liveField.length >= 15 ? liveField : rostersBySeries[week.seriesId] ?? drivers
+      // Draws must come from the real Cup field only. Scanner/audio mappings
+      // include non-driver channels, so they are never used for assignments.
+      const { pool } = drawPoolForWeek(week, liveRace)
       const { assignments, communityTeams } = dealField(state.players, week.participantIds, pool)
 
       return {
@@ -1618,16 +1560,6 @@ function App() {
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveRace, activeWeek.id, activeWeek.winningDriverNumber])
-
-  function selectWeekendSeries(seriesId: SeriesId) {
-    const race = weekendBySeries[String(seriesId)]
-    if (!race) {
-      return
-    }
-
-    updateState({ ...state, activeWeekId: race.id })
-    setSelectedLiveWeekId(race.id)
-  }
 
   function togglePaid(playerId: string) {
     if (!activeWeek.participantIds.includes(playerId)) {
@@ -2104,28 +2036,10 @@ function App() {
             </div>
           </div>
 
-          <div className="series-switch" role="group" aria-label="Race weekend series">
-            {seriesOrder.map((seriesId) => {
-              const race = weekendBySeries[String(seriesId)]
-              const meta = seriesMeta[seriesId]
-              const isActive = activeWeek.id === race?.id
-              // Prefer the week's live-updated name so the button shows the race
-              // that's actually running, not the hardcoded default.
-              const liveName = state.weeks.find((week) => week.id === race?.id)?.race ?? race?.race
-
-              return (
-                <button
-                  key={seriesId}
-                  type="button"
-                  className={isActive ? 'active' : ''}
-                  onClick={() => selectWeekendSeries(seriesId)}
-                >
-                  <span>{meta.day}</span>
-                  <strong>{meta.short}</strong>
-                  <small>{liveName}</small>
-                </button>
-              )
-            })}
+          <div className="cup-focus" aria-label="Active Cup race">
+            <span>Sunday Cup</span>
+            <strong>{activeWeek.race}</strong>
+            <small>{activeWeek.track}</small>
           </div>
 
           <div className="premium-strip">
@@ -2857,7 +2771,7 @@ function App() {
                 value={state.activeWeekId}
                 onChange={(event) => updateState({ ...state, activeWeekId: event.target.value })}
               >
-                {state.weeks.map((week) => (
+                {state.weeks.filter((week) => week.seriesId === 1).map((week) => (
                   <option key={week.id} value={week.id}>
                     {seriesMeta[week.seriesId].short} - {week.race}
                   </option>
@@ -2895,12 +2809,11 @@ function App() {
                 <h3>{drawComplete ? 'Teams are posted' : 'Ready to draw teams'}</h3>
                 <span>
                   {(() => {
-                    const liveField = fieldFromLiveRace(liveRace)
-                    const pool = liveField.length >= 15 ? liveField : rostersBySeries[activeWeek.seriesId] ?? drivers
+                    const { pool, source } = drawPoolForWeek(activeWeek, liveRace)
                     const n = activeWeek.participantIds.length
                     const each = n > 0 ? Math.floor(pool.length / n) : 0
                     const leftover = n > 0 ? pool.length - each * n : 0
-                    return `${pool.length} cars${liveField.length >= 15 ? ' (live field)' : ''} · ${n} players → ${each} each${
+                    return `${pool.length} cars (${source}) · ${n} players → ${each} each${
                       leftover > 0 ? ` + ${leftover} shared` : ''
                     }`
                   })()}
