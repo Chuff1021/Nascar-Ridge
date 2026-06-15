@@ -199,7 +199,11 @@ export default async function handler(request, response) {
     const stored = await readShared()
     response.setHeader('Cache-Control', 'no-store')
     response.status(200).json({ state: stored, configured: true })
-  } catch {
-    response.status(502).json({ error: 'League sync is unavailable right now.' })
+  } catch (error) {
+    console.error('League sync handler failed', error)
+    response.status(502).json({
+      error: 'League sync is unavailable right now.',
+      detail: error instanceof Error ? error.message : 'Unknown sync error',
+    })
   }
 }

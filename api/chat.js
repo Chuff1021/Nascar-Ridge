@@ -115,7 +115,11 @@ export default async function handler(request, response) {
     const messages = await readMessages()
     response.setHeader('Cache-Control', 'no-store')
     response.status(200).json({ messages, configured: true })
-  } catch {
-    response.status(502).json({ error: 'Chat store is unavailable right now.' })
+  } catch (error) {
+    console.error('Chat sync handler failed', error)
+    response.status(502).json({
+      error: 'Chat store is unavailable right now.',
+      detail: error instanceof Error ? error.message : 'Unknown chat sync error',
+    })
   }
 }
