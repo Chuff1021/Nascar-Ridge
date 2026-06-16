@@ -11,8 +11,17 @@
 import { neon } from '@neondatabase/serverless'
 
 const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019ed27d-be40-729b-a333-53711e8a7171'
-const DB_URL =
-  process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
+const DB_ENV_NAMES = [
+  'DATABASE_URL',
+  'POSTGRES_URL',
+  'NEON_DATABASE_URL',
+  'DATABASE_URL_UNPOOLED',
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'POSTGRES_URL_NO_SSL',
+  'NEON_POSTGRES_URL',
+]
+const DB_URL = DB_ENV_NAMES.map((name) => process.env[name]).find(Boolean)
 const sql = DB_URL ? neon(DB_URL) : null
 const STATE_ID = 'current'
 
@@ -36,10 +45,10 @@ function ensureSchema() {
 async function readBlobShared() {
   const res = await fetch(STATE_BLOB, { headers: { accept: 'application/json' } })
   if (!res.ok) {
-    return null
+    return { state: null, backend: 'jsonblob' }
   }
   const parsed = await res.json().catch(() => null)
-  return isStateShape(parsed) ? parsed : null
+  return { state: isStateShape(parsed) ? parsed : null, backend: 'jsonblob' }
 }
 
 async function readShared() {
@@ -49,7 +58,7 @@ async function readShared() {
       const rows = await sql`SELECT data FROM league_state WHERE id = ${STATE_ID}`
       const data = rows[0]?.data
       if (isStateShape(data)) {
-        return data
+        return { state: data, backend: 'neon' }
       }
     } catch (error) {
       console.error('Neon state read failed; falling back to jsonblob', error)
@@ -181,7 +190,7 @@ export default async function handler(request, response) {
       const incoming = sanitize(incomingRaw)
       const forceWeekId = typeof incomingRaw?.forceWeekId === 'string' ? incomingRaw.forceWeekId : undefined
 
-      const stored = await readShared()
+      const { state: stored } = await readShared()
       const merged = stored
         ? {
             players: mergePlayers(stored.players, incoming.players),
@@ -196,9 +205,9 @@ export default async function handler(request, response) {
       return
     }
 
-    const stored = await readShared()
+    const { state: stored, backend } = await readShared()
     response.setHeader('Cache-Control', 'no-store')
-    response.status(200).json({ state: stored, configured: true })
+    response.status(200).json({ state: stored, configured: true, backend })
   } catch (error) {
     console.error('League sync handler failed', error)
     response.status(502).json({

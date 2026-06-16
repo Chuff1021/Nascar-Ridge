@@ -8,8 +8,17 @@
 import { neon } from '@neondatabase/serverless'
 
 const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019ed27c-c957-7209-b883-0529e2155373'
-const DB_URL =
-  process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
+const DB_ENV_NAMES = [
+  'DATABASE_URL',
+  'POSTGRES_URL',
+  'NEON_DATABASE_URL',
+  'DATABASE_URL_UNPOOLED',
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'POSTGRES_URL_NO_SSL',
+  'NEON_POSTGRES_URL',
+]
+const DB_URL = DB_ENV_NAMES.map((name) => process.env[name]).find(Boolean)
 const sql = DB_URL ? neon(DB_URL) : null
 const MAX_MESSAGES = 500
 
