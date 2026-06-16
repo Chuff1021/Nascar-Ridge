@@ -72,7 +72,20 @@ async function readMessages() {
     return []
   }
   const parsed = await res.json().catch(() => null)
-  return Array.isArray(parsed?.messages) ? parsed.messages.filter(isMessage) : []
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages.filter(isMessage) : []
+  if (sql && messages.length > 0) {
+    try {
+      await ensureSchema()
+      for (const message of messages) {
+        await sql`INSERT INTO chat_messages (id, player_id, body, sent_at)
+          VALUES (${message.id}, ${message.playerId}, ${message.body}, ${message.sentAt})
+          ON CONFLICT (id) DO NOTHING`
+      }
+    } catch (error) {
+      console.error('Neon chat migration failed; using jsonblob messages', error)
+    }
+  }
+  return messages
 }
 
 async function appendMessage(message) {

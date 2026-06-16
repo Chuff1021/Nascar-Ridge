@@ -60,6 +60,13 @@ async function readShared() {
       if (isStateShape(data)) {
         return { state: data, backend: 'neon' }
       }
+      const blob = await readBlobShared()
+      if (isStateShape(blob.state)) {
+        await sql`INSERT INTO league_state (id, data, updated_at)
+          VALUES (${STATE_ID}, ${JSON.stringify(blob.state)}::jsonb, now())
+          ON CONFLICT (id) DO NOTHING`
+        return { state: blob.state, backend: 'neon-migrated' }
+      }
     } catch (error) {
       console.error('Neon state read failed; falling back to jsonblob', error)
     }
