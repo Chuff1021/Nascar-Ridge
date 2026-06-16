@@ -233,30 +233,39 @@ const drivers: Driver[] = [
 const allPlayerIds = players.map((player) => player.id)
 
 const remainingCupSchedule = [
-  { id: 'w5', race: 'Cracker Barrel 400', track: 'Nashville Superspeedway', date: 'May 31' },
-  { id: 'w6', race: 'FireKeepers Casino 400', track: 'Michigan International Speedway', date: 'Jun 7' },
-  { id: 'w7', race: 'The Great American Getaway 400', track: 'Pocono Raceway', date: 'Jun 14' },
-  { id: 'w8', race: 'San Diego', track: 'Naval Base Coronado', date: 'Jun 21' },
-  { id: 'w9', race: 'Sonoma', track: 'Sonoma Raceway', date: 'Jun 28' },
-  { id: 'w10', race: 'Chicagoland', track: 'Chicagoland Speedway', date: 'Jul 5' },
-  { id: 'w11', race: 'EchoPark Atlanta', track: 'EchoPark Speedway', date: 'Jul 12' },
-  { id: 'w12', race: 'North Wilkesboro', track: 'North Wilkesboro Speedway', date: 'Jul 19' },
-  { id: 'w13', race: 'Indianapolis', track: 'Indianapolis Motor Speedway', date: 'Jul 26' },
-  { id: 'w14', race: 'Iowa', track: 'Iowa Speedway', date: 'Aug 9' },
-  { id: 'w15', race: 'Richmond', track: 'Richmond Raceway', date: 'Aug 15' },
-  { id: 'w16', race: 'New Hampshire', track: 'New Hampshire Motor Speedway', date: 'Aug 23' },
-  { id: 'w17', race: 'Daytona', track: 'Daytona International Speedway', date: 'Aug 29' },
-  { id: 'w18', race: 'Darlington', track: 'Darlington Raceway', date: 'Sep 6' },
-  { id: 'w19', race: 'WWTR St. Louis', track: 'World Wide Technology Raceway', date: 'Sep 13' },
-  { id: 'w20', race: 'Bristol Night Race', track: 'Bristol Motor Speedway', date: 'Sep 19' },
-  { id: 'w21', race: 'Kansas', track: 'Kansas Speedway', date: 'Sep 27' },
-  { id: 'w22', race: 'Las Vegas', track: 'Las Vegas Motor Speedway', date: 'Oct 4' },
-  { id: 'w23', race: 'Charlotte Roval', track: 'Charlotte Motor Speedway Road Course', date: 'Oct 11' },
-  { id: 'w24', race: 'Phoenix', track: 'Phoenix Raceway', date: 'Oct 18' },
-  { id: 'w25', race: 'Talladega', track: 'Talladega Superspeedway', date: 'Oct 25' },
-  { id: 'w26', race: 'Martinsville', track: 'Martinsville Speedway', date: 'Nov 1' },
-  { id: 'w27', race: 'Homestead-Miami Championship', track: 'Homestead-Miami Speedway', date: 'Nov 8' },
+  { id: 'w5', race: 'Cracker Barrel 400', track: 'Nashville Superspeedway', date: 'May 31', scheduledAt: '2026-05-31T19:00:00' },
+  { id: 'w6', race: 'FireKeepers Casino 400', track: 'Michigan International Speedway', date: 'Jun 7', scheduledAt: '2026-06-07T15:00:00' },
+  { id: 'w7', race: 'Great American Getaway 400 presented by VISITPA', track: 'Pocono Raceway', date: 'Jun 14', scheduledAt: '2026-06-14T15:00:00' },
+  { id: 'w8', race: 'Anduril 250', track: 'San Diego Street Course', date: 'Jun 21', scheduledAt: '2026-06-21T16:00:00' },
+  { id: 'w9', race: 'Toyota / Save Mart 350', track: 'Sonoma Raceway', date: 'Jun 28', scheduledAt: '2026-06-28T15:30:00' },
+  { id: 'w10', race: 'eero 400', track: 'Chicagoland Speedway', date: 'Jul 5', scheduledAt: '2026-07-05T18:00:00' },
+  { id: 'w11', race: 'Quaker State 400 Available at Walmart', track: 'Atlanta Motor Speedway', date: 'Jul 12', scheduledAt: '2026-07-12T19:00:00' },
+  { id: 'w12', race: 'Window World 450', track: 'North Wilkesboro Speedway', date: 'Jul 19', scheduledAt: '2026-07-19T19:00:00' },
+  { id: 'w13', race: 'Brickyard 400', track: 'Indianapolis Motor Speedway', date: 'Jul 26', scheduledAt: '2026-07-26T14:00:00' },
+  { id: 'w14', race: 'Iowa Corn 350 Powered by Ethanol', track: 'Iowa Speedway', date: 'Aug 9', scheduledAt: '2026-08-09T15:30:00' },
+  { id: 'w15', race: 'Cook Out 400', track: 'Richmond Raceway', date: 'Aug 15', scheduledAt: '2026-08-15T19:00:00' },
+  { id: 'w16', race: 'Dollar Tree 301', track: 'New Hampshire Motor Speedway', date: 'Aug 23', scheduledAt: '2026-08-23T15:00:00' },
+  { id: 'w17', race: 'Coke Zero Sugar 400', track: 'Daytona International Speedway', date: 'Aug 29', scheduledAt: '2026-08-29T19:30:00' },
+  { id: 'w18', race: 'Cook Out Southern 500', track: 'Darlington Raceway', date: 'Sep 6', scheduledAt: '2026-09-06T17:00:00' },
+  { id: 'w19', race: 'Enjoy Illinois 300', track: 'World Wide Technology Raceway', date: 'Sep 13', scheduledAt: '2026-09-13T15:00:00' },
+  { id: 'w20', race: 'Bass Pro Shops Night Race', track: 'Bristol Motor Speedway', date: 'Sep 19', scheduledAt: '2026-09-19T19:30:00' },
+  { id: 'w21', race: 'Hollywood Casino 400', track: 'Kansas Speedway', date: 'Sep 27', scheduledAt: '2026-09-27T15:00:00' },
+  { id: 'w22', race: 'South Point 400', track: 'Las Vegas Motor Speedway', date: 'Oct 4', scheduledAt: '2026-10-04T17:30:00' },
+  { id: 'w23', race: 'Bank of America 400', track: 'Charlotte Motor Speedway', date: 'Oct 11', scheduledAt: '2026-10-11T15:00:00' },
+  { id: 'w24', race: 'Freeway Insurance 500', track: 'Phoenix Raceway', date: 'Oct 18', scheduledAt: '2026-10-18T15:00:00' },
+  { id: 'w25', race: 'YellaWood 500', track: 'Talladega Superspeedway', date: 'Oct 25', scheduledAt: '2026-10-25T14:00:00' },
+  { id: 'w26', race: 'Xfinity 500', track: 'Martinsville Speedway', date: 'Nov 1', scheduledAt: '2026-11-01T14:00:00' },
+  { id: 'w27', race: 'NASCAR Championship Race', track: 'Homestead-Miami Speedway', date: 'Nov 8', scheduledAt: '2026-11-08T15:00:00' },
 ]
+
+type CupScheduleRace = (typeof remainingCupSchedule)[number]
+
+function activeCupRaceForDate(now = new Date()): CupScheduleRace {
+  // Keep race day selected through the evening, then roll forward automatically.
+  const rolloverWindowMs = 18 * 60 * 60 * 1000
+  const cutoff = now.getTime() - rolloverWindowMs
+  return remainingCupSchedule.find((race) => new Date(race.scheduledAt).getTime() >= cutoff) ?? remainingCupSchedule[remainingCupSchedule.length - 1]
+}
 
 type SeriesId = 1 | 2 | 3
 
@@ -266,12 +275,13 @@ const seriesMeta: Record<SeriesId, { short: string; name: string; day: string }>
   1: { short: 'Cup', name: 'Cup Series', day: 'Sunday' },
 }
 
-const currentCupWeekId = 'w7'
+const currentCupRace = activeCupRaceForDate()
+const currentCupWeekId = currentCupRace.id
 
 // Sunday Cup only. Truck/Xfinity choices are intentionally hidden from the
 // active race workflow so the draw cannot land on the wrong series.
 const raceWeekend: Array<{ seriesId: SeriesId; id: string; race: string; track: string; date: string }> = [
-  { seriesId: 1, id: currentCupWeekId, race: 'The Great American Getaway 400', track: 'Pocono Raceway', date: 'Jun 14' },
+  { seriesId: 1, id: currentCupWeekId, race: currentCupRace.race, track: currentCupRace.track, date: currentCupRace.date },
 ]
 
 const starterState: AppState = {
@@ -443,12 +453,13 @@ function mergeSharedState(local: AppState, remote: SharedState): AppState {
   const localIds = new Set(local.players.map((player) => player.id))
   const extraPlayers = (remote.players ?? []).filter((player) => player && player.id && !localIds.has(player.id))
   const players = extraPlayers.length ? [...local.players, ...extraPlayers] : local.players
+  const remoteActiveWeek = merged.weeks.find((week) => week.id === remote.activeWeekId)
+  const shouldAdoptRemoteActiveWeek = Boolean(remoteActiveWeek && hasDraw(remoteActiveWeek))
 
-  // Note: we intentionally keep this device's own active week. Every phone
-  // independently follows the live race (see the auto-follow effect), so we
-  // don't adopt a remote active week — that used to fight the live-race jump
-  // and could snap everyone onto a stale week.
-  return { ...merged, players }
+  // A commissioner's published draw should bring every neighbor to that same
+  // race. We only adopt the remote active race when it has a real lineup, so an
+  // empty/fresh store can never drag phones onto a blank old week.
+  return { ...merged, players, activeWeekId: shouldAdoptRemoteActiveWeek ? remoteActiveWeek!.id : local.activeWeekId }
 }
 
 // The slice of state we share across phones. currentUserId (per-device login)
