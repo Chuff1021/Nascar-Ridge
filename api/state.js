@@ -10,7 +10,7 @@
 //      setup, but the free blobs get purged after a few idle days).
 import { neon } from '@neondatabase/serverless'
 
-const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6b7d-72fa-b432-a5c083fe897a'
+const STATE_BLOB = 'https://jsonblob.com/api/jsonBlob/019ed27d-be40-729b-a333-53711e8a7171'
 const DB_URL =
   process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
 const sql = DB_URL ? neon(DB_URL) : null

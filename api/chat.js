@@ -7,7 +7,7 @@
 //   2. A zero-setup anonymous jsonblob.com store as the fallback.
 import { neon } from '@neondatabase/serverless'
 
-const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019ea379-6cf5-7a9a-91d6-0585bf95bda5'
+const CHAT_BLOB = 'https://jsonblob.com/api/jsonBlob/019ed27c-c957-7209-b883-0529e2155373'
 const DB_URL =
   process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.NEON_DATABASE_URL || process.env.DATABASE_URL_UNPOOLED
 const sql = DB_URL ? neon(DB_URL) : null

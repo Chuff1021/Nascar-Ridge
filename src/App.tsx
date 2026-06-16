@@ -1009,6 +1009,8 @@ function App() {
   const [newWeekName, setNewWeekName] = useState('')
   const [newNeighborName, setNewNeighborName] = useState('')
   const [neighborError, setNeighborError] = useState('')
+  const [publishNote, setPublishNote] = useState('')
+  const [isPublishingLineup, setIsPublishingLineup] = useState(false)
   const [selectedLiveWeekId, setSelectedLiveWeekId] = useState<string>()
   const [liveRace, setLiveRace] = useState<LiveRace>()
   const [liveStatus, setLiveStatus] = useState('Connecting to NASCAR timing...')
@@ -1289,7 +1291,7 @@ function App() {
     }
 
     pullSharedState()
-    const timer = window.setInterval(pullSharedState, 15000)
+    const timer = window.setInterval(pullSharedState, 5000)
     const onFocus = () => pullSharedState()
     window.addEventListener('focus', onFocus)
 
@@ -1524,6 +1526,8 @@ function App() {
     if (!hasDraw(activeWeek)) {
       return
     }
+    setIsPublishingLineup(true)
+    setPublishNote('Publishing lineup...')
     if (pushTimerRef.current) {
       window.clearTimeout(pushTimerRef.current)
       pushTimerRef.current = null
@@ -1544,11 +1548,14 @@ function App() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ...toSharedState(next), forceWeekId: activeWeek.id }),
       })
+      const data = await response.json().catch(() => null)
       if (!response.ok) {
+        const detail = data?.detail || data?.error || `HTTP ${response.status}`
+        setPublishNote(`Publish failed: ${detail}`)
         return
       }
-      const data = await response.json()
       if (!data?.configured || !data.state || !Array.isArray(data.state.weeks)) {
+        setPublishNote('Publish failed: shared store did not return the lineup.')
         return
       }
       setState((prev) => {
@@ -1556,8 +1563,11 @@ function App() {
         saveState(merged)
         return merged
       })
-    } catch {
-      // Local copy is saved. The next successful publish/sync can still push it.
+      setPublishNote('Published. Neighbors should update within 5 seconds.')
+    } catch (error) {
+      setPublishNote(`Publish failed: ${error instanceof Error ? error.message : 'network error'}`)
+    } finally {
+      setIsPublishingLineup(false)
     }
   }
 
@@ -2861,10 +2871,13 @@ function App() {
             </div>
 
             {hasDraw(activeWeek) && (
-              <button type="button" className="republish-btn" onClick={republishDraw}>
-                <Upload size={16} />
-                Publish this lineup to everyone
-              </button>
+              <>
+                <button type="button" className="republish-btn" onClick={republishDraw} disabled={isPublishingLineup}>
+                  <Upload size={16} />
+                  {isPublishingLineup ? 'Publishing lineup...' : 'Publish this lineup to everyone'}
+                </button>
+                {publishNote && <p className="publish-note">{publishNote}</p>}
+              </>
             )}
 
             <div>
